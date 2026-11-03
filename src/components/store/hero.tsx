@@ -4,10 +4,17 @@ import Image from "next/image";
 import Link from "next/link";
 import { motion, useScroll, useTransform } from "motion/react";
 import { useRef } from "react";
-import { ButtonLink, Eyebrow, ProviderChip } from "@/components/ui/primitives";
+import { ButtonLink, ProviderChip } from "@/components/ui/primitives";
 import { expo, SplitHeadline } from "@/components/ui/motion";
 import type { Product } from "@/lib/types";
 import { formatSAR, installment } from "@/lib/utils";
+
+// Small tilted tiles for the phone layout, stacked like the desktop cascade
+const mobileTiles = [
+  "absolute right-14 top-0 w-[5.5rem] -rotate-6",
+  "absolute right-0 top-5 z-10 w-20 rotate-[5deg]",
+  "absolute right-6 top-[5.75rem] z-20 w-[4.5rem] -rotate-2",
+];
 
 /** Editorial split + Z-axis cascade of floating product cards. */
 export function Hero({ products }: { products: Product[] }) {
@@ -27,11 +34,33 @@ export function Hero({ products }: { products: Product[] }) {
     <section ref={ref} className="relative overflow-hidden px-4 pb-24 pt-32 md:min-h-[100dvh] md:pt-40">
       <div aria-hidden className="pointer-events-none absolute -right-40 -top-40 size-[640px] rounded-full bg-ember/10 blur-[120px]" />
       <div className="mx-auto grid max-w-7xl items-center gap-16 md:grid-cols-2">
-        <div>
-          <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, ease: expo }}>
-            <Eyebrow>Tabby & Tamara on every store</Eyebrow>
-          </motion.div>
-          <h1 className="font-display mt-8 text-[clamp(3.4rem,8vw,7.5rem)] leading-[0.9]">
+        <div className="relative">
+          {/* Mobile: the three products float in the space beside the headline */}
+          <div className="pointer-events-none absolute right-0 top-0 z-10 h-40 w-36 md:hidden">
+            {cards.map(({ p }, i) => (
+              <motion.div
+                key={p.id}
+                initial={{ opacity: 0, scale: 0.8, filter: "blur(10px)" }}
+                animate={{ opacity: 1, scale: 1, filter: "blur(0px)", y: [0, i % 2 ? 5 : -5, 0] }}
+                transition={{
+                  opacity: { duration: 1.1, delay: 0.3 + i * 0.12, ease: expo },
+                  scale: { duration: 1.1, delay: 0.3 + i * 0.12, ease: expo },
+                  filter: { duration: 1.1, delay: 0.3 + i * 0.12, ease: expo },
+                  y: { duration: 5 + i, delay: 1.4, repeat: Infinity, ease: "easeInOut" },
+                }}
+                className={mobileTiles[i]}
+              >
+                <Link
+                  href={`/product/${p.id}`}
+                  aria-label={p.title}
+                  className="pointer-events-auto relative block aspect-[4/5] overflow-hidden rounded-[1.1rem] bg-sand ring-4 ring-paper shadow-[var(--shadow-float)] transition-transform duration-500 ease-[var(--ease-fluid)] active:scale-95"
+                >
+                  <Image src={p.images[0]} alt="" fill priority sizes="96px" className="object-cover" />
+                </Link>
+              </motion.div>
+            ))}
+          </div>
+          <h1 className="font-display relative text-[clamp(3.4rem,8vw,7.5rem)] leading-[0.9]">
             <SplitHeadline
               delay={0.1}
               lines={[
@@ -67,7 +96,7 @@ export function Hero({ products }: { products: Product[] }) {
           </motion.div>
         </div>
 
-        <div className="relative grid grid-cols-1 gap-6 md:block md:h-[640px]">
+        <div className="relative hidden md:block md:h-[640px]">
           {cards.map(({ p, y, cls, d }) => (
             <motion.div
               key={p.id}
