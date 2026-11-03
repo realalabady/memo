@@ -1,0 +1,84 @@
+rules_version = '2';
+
+// Money-moving writes (orders, ledger payment status, payouts) happen only on the
+// server through the Admin SDK, which bypasses these rules.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function uid() { return request.auth.uid; }
+    function userDoc() { return get(/databases/$(database)/documents/users/$(uid())); }
+    function isAdmin() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(uid()))
+        && userDoc().data.role == 'admin';
+    }
+    function isApprovedMerchant() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/merchants/$(uid()))
+        && get(/databases/$(database)/documents/merchants/$(uid())).data.status == 'approved';
+    }
+    function changes() { return request.resource.data.diff(resource.data).affectedKeys(); }
+
+    match /users/{userId} {
+      allow read: if signedIn() && (uid() == userId || isAdmin());
+      allow create: if isAdmin();
+      // created by /api/auth/bootstrap; users may edit their profile but never their role
+      allow update: if isAdmin() || (signedIn() && uid() == userId && !changes().hasAny(['role', 'uid', 'email']));
+    }
+
+    match /merchants/{merchantId} {
+      allow read: if true;
+      allow create: if signedIn() && uid() == merchantId
+        && request.resource.data.status == 'pending'
+        && !('commissionRate' in request.resource.data);
+      allow update: if isAdmin()
+        || (signedIn() && uid() == merchantId && !changes().hasAny(['status', 'commissionRate', 'slug']));
+
+      // Bank details: owner + admin only
+      match /private/{docId} {
+        allow read, write: if signedIn() && (uid() == merchantId || isAdmin());
+      }
+    }
+
+    match /categories/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /products/{id} {
+      allow read: if resource.data.status == 'active'
+        || (signedIn() && (resource.data.merchantId == uid() || isAdmin()));
+      allow create: if isApprovedMerchant()
+        && request.resource.data.merchantId == uid()
+        && request.resource.data.price is number && request.resource.data.price > 0
+        && request.resource.data.stock is int && request.resource.data.stock >= 0;
+      allow update: if isAdmin()
+        || (isApprovedMerchant() && resource.data.merchantId == uid() && request.resource.data.merchantId == uid());
+      allow delete: if isAdmin() || (signedIn() && resource.data.merchantId == uid());
+    }
+
+    match /orders/{id} {
+      allow read: if signedIn() && (resource.data.customerId == uid() || isAdmin());
+      allow write: if false;
+    }
+
+    match /merchantOrders/{id} {
+      allow read: if signedIn() && (resource.data.merchantId == uid() || isAdmin());
+      // merchants can only move fulfilment forward
+      allow update: if signedIn() && resource.data.merchantId == uid()
+        && changes().hasOnly(['fulfillmentStatus', 'trackingNumber', 'updatedAt'])
+        && request.resource.data.fulfillmentStatus in ['pending', 'shipped', 'delivered'];
+      allow create, delete: if false;
+    }
+
+    match /payouts/{id} {
+      allow read: if signedIn() && (resource.data.merchantId == uid() || isAdmin());
+      allow write: if false;
+    }
+
+    match /settings/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+  }
+}
