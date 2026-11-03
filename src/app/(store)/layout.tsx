@@ -1,5 +1,4 @@
 import { Suspense } from "react";
-import { DemoBanner } from "@/components/demo-banner";
 import { CartDrawer } from "@/components/store/cart-drawer";
 import { StoreFooter } from "@/components/store/footer";
 import { StoreNav } from "@/components/store/nav";
@@ -14,7 +13,6 @@ export default function StoreLayout({ children }: LayoutProps<"/">) {
       <main className="flex-1">{children}</main>
       <StoreFooter />
       <CartDrawer />
-      <DemoBanner />
     </>
   );
 }

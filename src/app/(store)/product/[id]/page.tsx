@@ -12,6 +12,11 @@ import { Eyebrow } from "@/components/ui/primitives";
 import { getMerchants, getProduct, getProducts } from "@/lib/server/catalog";
 import { formatSAR } from "@/lib/utils";
 
+export async function generateStaticParams() {
+  const products = await getProducts();
+  return products.map((p) => ({ id: p.id }));
+}
+
 async function ProductContent({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const product = await getProduct(id);
