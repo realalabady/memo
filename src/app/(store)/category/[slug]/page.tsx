@@ -2,11 +2,11 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { CategoryPills, GridSkeleton, ListingHeader } from "@/components/store/listing";
 import { ProductGrid } from "@/components/store/product-card";
-import { getCategories, getCategoryBySlug, getProducts } from "@/lib/server/catalog";
+import { getCategories, getCategoryBySlug, getProducts, staticParamsOrPlaceholder } from "@/lib/server/catalog";
 
 export async function generateStaticParams() {
   const categories = await getCategories();
-  return categories.map((c) => ({ slug: c.slug }));
+  return staticParamsOrPlaceholder("slug", categories.map((c) => c.slug));
 }
 
 async function CategoryContent({ params }: { params: Promise<{ slug: string }> }) {

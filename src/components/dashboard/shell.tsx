@@ -19,7 +19,7 @@ export interface NavItem {
 
 type ShellProps = { role: Role; title: string; nav: NavItem[]; children: ReactNode };
 
-function ShellLoader() {
+export function ShellLoader() {
   return (
     <div className="flex min-h-[100dvh] items-center justify-center">
       <LogoMark className="size-10 animate-pulse" />

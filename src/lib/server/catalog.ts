@@ -69,6 +69,15 @@ export async function getMerchantBySlug(slug: string): Promise<Merchant | null> 
   return all.find((m) => m.slug === slug) ?? null;
 }
 
+/**
+ * Cache Components requires generateStaticParams to return at least one param.
+ * With an empty catalog we return a placeholder that the page resolves to notFound().
+ */
+export function staticParamsOrPlaceholder<K extends string>(key: K, values: string[]) {
+  const list = values.length ? values : ["__placeholder__"];
+  return list.map((v) => ({ [key]: v }) as Record<K, string>);
+}
+
 export async function getCategoryBySlug(slug: string): Promise<Category | null> {
   const all = await getCategories();
   return all.find((c) => c.slug === slug) ?? null;

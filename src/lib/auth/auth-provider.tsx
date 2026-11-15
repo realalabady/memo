@@ -35,13 +35,28 @@ interface AuthState {
 const Ctx = createContext<AuthState | null>(null);
 const DEMO_KEY = "memo-demo-role";
 
+/** Creates/syncs users/{uid} and custom claims; refreshes the ID token when claims changed. */
 async function bootstrap(user: User, displayName?: string) {
   const token = await user.getIdToken();
-  await fetch("/api/auth/bootstrap", {
+  const res = await fetch("/api/auth/bootstrap", {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ displayName }),
+    body: JSON.stringify(displayName ? { displayName } : {}),
   });
+  if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as { error?: string }).error ?? "Sign-in failed");
+  const body = (await res.json()) as { claimsChanged?: boolean };
+  if (body.claimsChanged) await user.getIdToken(true);
+}
+
+/** Mints the httpOnly session cookie the server-gated dashboards check. */
+async function mintSession(user: User) {
+  const token = await user.getIdToken();
+  await fetch("/api/auth/session", { method: "POST", headers: { Authorization: `Bearer ${token}` } });
+}
+
+/** Only allow same-origin relative redirects (blocks `//evil.com` and absolute URLs). */
+export function safeNext(next: string | null | undefined) {
+  return next && next.startsWith("/") && !next.startsWith("//") && !next.startsWith("/\\") ? next : null;
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -75,21 +90,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  // Live profile + merchant docs
+  // Live profile + merchant docs. The profile is only exposed once the session cookie exists,
+  // so redirects into server-gated dashboards never bounce back to /login.
   useEffect(() => {
     if (!isFirebaseConfigured || !fbUser) return;
     let first = true;
-    const offProfile = onSnapshot(doc(db(), "users", fbUser.uid), async (snap) => {
-      if (!snap.exists() && first) {
-        first = false;
-        await bootstrap(fbUser).catch(console.error);
-        return;
-      }
-      setProfile(snap.exists() ? (snap.data() as UserProfile) : null);
+    const session = mintSession(fbUser).catch(console.error);
+    const fail = (err: unknown) => {
+      console.error(err);
+      setProfile(null);
       setLoading(false);
-    });
-    const offMerchant = onSnapshot(doc(db(), "merchants", fbUser.uid), (snap) =>
-      setMerchant(snap.exists() ? ({ id: snap.id, ...snap.data() } as Merchant) : null),
+    };
+    const offProfile = onSnapshot(
+      doc(db(), "users", fbUser.uid),
+      async (snap) => {
+        if (!snap.exists() && first) {
+          first = false;
+          // The snapshot fires again once bootstrap creates the doc.
+          await bootstrap(fbUser).catch(fail);
+          return;
+        }
+        await session;
+        setProfile(snap.exists() ? (snap.data() as UserProfile) : null);
+        setLoading(false);
+      },
+      fail,
+    );
+    const offMerchant = onSnapshot(
+      doc(db(), "merchants", fbUser.uid),
+      (snap) => setMerchant(snap.exists() ? ({ id: snap.id, ...snap.data() } as Merchant) : null),
+      console.error,
     );
     return () => {
       offProfile();
@@ -153,7 +183,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const cred = await signInWithPopup(auth(), new GoogleAuthProvider());
         await bootstrap(cred.user);
       },
-      signOut: () => fbSignOut(auth()),
+      signOut: async () => {
+        await fetch("/api/auth/session", { method: "DELETE" }).catch(() => {});
+        await fbSignOut(auth());
+      },
       enterDemo,
     };
   }, [demoRole, fbUser, profile, merchant, loading, enterDemo]);

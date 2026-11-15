@@ -8,7 +8,7 @@ import { Crown, Storefront, User } from "@phosphor-icons/react";
 import { Logo } from "@/components/brand/logo";
 import { Bezel, Button, Field } from "@/components/ui/primitives";
 import { Reveal } from "@/components/ui/motion";
-import { useAuth } from "@/lib/auth/auth-provider";
+import { safeNext, useAuth } from "@/lib/auth/auth-provider";
 import type { Role } from "@/lib/types";
 
 const home: Record<Role, string> = { admin: "/admin", merchant: "/merchant", customer: "/account" };
@@ -16,7 +16,7 @@ const home: Record<Role, string> = { admin: "/admin", merchant: "/merchant", cus
 export function AuthForm({ mode }: { mode: "login" | "signup" }) {
   const { signIn, signUp, signInWithGoogle, enterDemo, demo, profile } = useAuth();
   const router = useRouter();
-  const next = useSearchParams().get("next");
+  const next = safeNext(useSearchParams().get("next"));
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {

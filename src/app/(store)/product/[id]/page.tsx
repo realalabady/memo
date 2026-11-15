@@ -9,12 +9,12 @@ import { InstallmentPlan } from "@/components/store/installments";
 import { ProductGrid } from "@/components/store/product-card";
 import { Reveal } from "@/components/ui/motion";
 import { Eyebrow } from "@/components/ui/primitives";
-import { getMerchants, getProduct, getProducts } from "@/lib/server/catalog";
+import { getMerchants, getProduct, getProducts, staticParamsOrPlaceholder } from "@/lib/server/catalog";
 import { formatSAR } from "@/lib/utils";
 
 export async function generateStaticParams() {
   const products = await getProducts();
-  return products.map((p) => ({ id: p.id }));
+  return staticParamsOrPlaceholder("id", products.map((p) => p.id));
 }
 
 async function ProductContent({ params }: { params: Promise<{ id: string }> }) {

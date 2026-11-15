@@ -5,11 +5,11 @@ import { GridSkeleton } from "@/components/store/listing";
 import { ProductGrid } from "@/components/store/product-card";
 import { Reveal } from "@/components/ui/motion";
 import { Eyebrow } from "@/components/ui/primitives";
-import { getMerchantBySlug, getMerchants, getProducts } from "@/lib/server/catalog";
+import { getMerchantBySlug, getMerchants, getProducts, staticParamsOrPlaceholder } from "@/lib/server/catalog";
 
 export async function generateStaticParams() {
   const merchants = await getMerchants();
-  return merchants.map((m) => ({ slug: m.slug }));
+  return staticParamsOrPlaceholder("slug", merchants.map((m) => m.slug));
 }
 
 async function StoreContent({ params }: { params: Promise<{ slug: string }> }) {

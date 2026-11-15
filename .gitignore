@@ -39,3 +39,11 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# firebase emulator logs
+firestore-debug.log
+firebase-debug.log
+ui-debug.log
+
+# brag launch video output
+/brag-output/

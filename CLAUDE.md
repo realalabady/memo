@@ -1,0 +1,41 @@
+@AGENTS.md
+
+# memo — project instructions
+
+Multi-store marketplace for Saudi Arabia: independent stores sell, shoppers pay in 4 with Tabby or Tamara through the **platform's** provider accounts, and the admin pays merchants from a per-order ledger.
+
+## Stack
+- Next.js 16 App Router (`cacheComponents: true`), React 19, TypeScript, Tailwind CSS 4
+- Firebase: Auth (client SDK), Firestore + Storage, firebase-admin on the server
+- zod for API input, zustand for the cart (`memo-cart` in localStorage), motion for animation, sonner toasts
+- **This Next.js has breaking changes** — read `node_modules/next/dist/docs/` before using routing/caching APIs (`proxy.ts` not middleware, `"use cache"` + `cacheTag`, async `params`).
+
+## Commands
+- Dev: `npm run dev` (port 3000) · Build: `npm run build` · Lint: `npm run lint` · Types: `npm run typecheck`
+- Unit tests: `npm test` (Vitest, `src/**/*.test.ts`)
+- Rules tests: `npm run test:rules` (Firestore emulator via firebase-tools; needs Java)
+- Seed sample data: `npm run seed`
+
+## Where things live
+- `src/app/(store)/` storefront · `src/app/merchant/`, `src/app/admin/` dashboards (server-gated by `components/dashboard/role-gate.tsx`)
+- `src/app/api/` route handlers — checkout, payments return URLs, webhooks, admin payouts, auth bootstrap/session
+- `src/lib/server/` server-only logic: `orders.ts` (order creation, settlement), `catalog.ts` (cached storefront reads), `auth.ts` (`requireUser`, sessions), `roles.ts` (custom claims)
+- `src/lib/payments/` Tabby/Tamara clients · `src/lib/money.ts` split math in halalas
+- `src/lib/data/` client hooks (live Firestore) and mutations · `src/lib/fixtures.ts` demo data
+- `firestore.rules`, `storage.rules`, `firestore.indexes.json` — security boundary; test in `tests/rules/`
+
+## Rules that matter
+- **Money and roles are server-only.** Orders, payment status, payouts, prices used for charging, commission, and roles are written with the Admin SDK in route handlers — never from the client SDK. Never trust prices, totals or roles sent by the browser.
+- Every API route: validate with zod, authenticate with `requireUser(req, roles?)`, throw `HttpError`, return `errorResponse(err)`.
+- Change roles only via `setRoleClaims` (`src/lib/server/roles.ts`); admins must never be demoted by store status changes.
+- Money math in halalas (`money.ts`), amounts sent to providers as 2-decimal values, currency SAR.
+- Settlement must stay idempotent: return URL and webhook can both fire for the same payment.
+- After catalog writes, revalidate the `catalog` cache tag.
+- Demo mode = no Firebase keys (development only). `PAYMENTS_DEMO` is ignored in production and `src/instrumentation.ts` refuses to boot with it.
+- Any change to `firestore.rules`/`storage.rules` needs a matching test in `tests/rules/`.
+
+## Conventions
+- Files kebab-case; components PascalCase; `@/` alias for `src/`
+- Client components start with `"use client"`; server modules import `"server-only"`
+- Commits: short imperative subject
+- Roadmap: demo → real marketplace plan (milestones M0–M8) — security & money first, then Arabic/RTL, VAT/refunds, customer/merchant/admin features, responsive pass, launch.
