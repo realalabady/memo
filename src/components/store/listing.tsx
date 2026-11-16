@@ -1,7 +1,11 @@
+"use client";
+
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { Reveal } from "@/components/ui/motion";
 import { Eyebrow } from "@/components/ui/primitives";
+import { localized } from "@/i18n/config";
+import { useLocale, useT } from "@/i18n/client";
 import type { Category } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -16,13 +20,15 @@ export function ListingHeader({ eyebrow, title, intro }: { eyebrow: string; titl
 }
 
 export function CategoryPills({ categories, active }: { categories: Category[]; active?: string }) {
+  const t = useT();
+  const lang = useLocale();
   return (
     <div className="no-scrollbar -mx-4 mb-12 flex gap-2 overflow-x-auto px-4">
       <Link
         href="/shop"
         className={cn("shrink-0 rounded-full px-4 py-2 text-sm ring-1 ring-ink/10 transition", !active ? "bg-ink text-paper" : "hover:bg-ink/5")}
       >
-        Everything
+        {t.listing.everything}
       </Link>
       {categories.map((c) => (
         <Link
@@ -30,7 +36,7 @@ export function CategoryPills({ categories, active }: { categories: Category[]; 
           href={`/category/${c.slug}`}
           className={cn("shrink-0 rounded-full px-4 py-2 text-sm ring-1 ring-ink/10 transition", active === c.id ? "bg-ink text-paper" : "hover:bg-ink/5")}
         >
-          {c.name}
+          {localized(c, "name", lang)}
         </Link>
       ))}
     </div>

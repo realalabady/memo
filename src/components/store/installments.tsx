@@ -4,8 +4,10 @@ import { motion } from "motion/react";
 import { useState } from "react";
 import { ProviderChip } from "@/components/ui/primitives";
 import { expo } from "@/components/ui/motion";
+import { useFormat, useT } from "@/i18n/client";
+import { fmt } from "@/i18n/dictionaries";
 import { providerAvailable } from "@/lib/money";
-import { cn, formatSAR, installment } from "@/lib/utils";
+import { cn, installment } from "@/lib/utils";
 
 const quarters = [
   "M15 15V3A12 12 0 0 0 3 15Z",
@@ -36,9 +38,10 @@ export function QuarterRing({ paid = 1, className }: { paid?: number; className?
 
 /** Installment schedule shown on product + checkout pages. */
 export function InstallmentPlan({ amount, compact }: { amount: number; compact?: boolean }) {
+  const t = useT().plan;
+  const { money } = useFormat();
   const [provider, setProvider] = useState<"tabby" | "tamara">("tabby");
   const per = installment(amount);
-  const labels = ["Today", "In 1 month", "In 2 months", "In 3 months"];
   const available = providerAvailable(provider, amount);
 
   return (
@@ -46,7 +49,8 @@ export function InstallmentPlan({ amount, compact }: { amount: number; compact?:
       <div className="rounded-[calc(1.75rem-0.375rem)] bg-paper p-5 shadow-[var(--shadow-inset)]">
         <div className="flex items-center justify-between gap-3">
           <p className="text-sm">
-            Split into 4 — <span className="font-medium">{formatSAR(per, { decimals: true })}</span>/mo
+            {t.split} <span className="font-medium">{money(per, { decimals: true })}</span>
+            {t.perMonth}
           </p>
           <div className="flex rounded-full bg-ink/[0.05] p-1">
             {(["tabby", "tamara"] as const).map((p) => (
@@ -65,10 +69,10 @@ export function InstallmentPlan({ amount, compact }: { amount: number; compact?:
         </div>
         {!compact && (
           <ol className="mt-5 grid grid-cols-4 gap-2">
-            {labels.map((l, i) => (
+            {t.schedule.map((l, i) => (
               <li key={l} className="flex flex-col items-center gap-2 text-center">
                 <QuarterRing paid={i + 1} className="size-8" />
-                <span className="text-[13px] tabular-nums">{formatSAR(per, { decimals: true })}</span>
+                <span className="text-[13px] tabular-nums">{money(per, { decimals: true })}</span>
                 <span className="text-[11px] text-muted">{l}</span>
               </li>
             ))}
@@ -76,7 +80,7 @@ export function InstallmentPlan({ amount, compact }: { amount: number; compact?:
         )}
         <p className="mt-4 flex items-center gap-2 text-[12px] text-muted">
           <ProviderChip provider={provider} />
-          {available ? "No interest. No fees when you pay on time." : `Not available for this amount with ${provider}.`}
+          {available ? t.noInterest : fmt(t.notAvailable, { provider })}
         </p>
       </div>
     </div>

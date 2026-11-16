@@ -15,9 +15,9 @@
   --color-tabby: #3eedbf;
   --color-tamara: #f2a07b;
 
-  --font-sans: var(--font-geist);
+  --font-sans: var(--font-geist), var(--font-arabic), system-ui, sans-serif;
   --font-mono: var(--font-geist-mono);
-  --font-display: var(--font-instrument);
+  --font-display: var(--font-instrument), var(--font-arabic-display), serif;
 
   --ease-fluid: cubic-bezier(0.32, 0.72, 0, 1);
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
@@ -68,6 +68,30 @@ body {
   letter-spacing: -0.02em;
 }
 
+/* Arabic: letter-spacing breaks cursive joining and there is no true italic — neutralise both. */
+[dir="rtl"] .font-display {
+  letter-spacing: 0;
+  line-height: 1.15;
+}
+[dir="rtl"] [class*="tracking-"] {
+  letter-spacing: 0 !important;
+}
+[dir="rtl"] .italic {
+  font-style: normal;
+}
+[dir="rtl"] [class*="uppercase"] {
+  text-transform: none;
+}
+/* The marquee scrolls the other way in RTL so it never runs out of content. */
+@keyframes marquee-rtl {
+  to {
+    transform: translateX(50%);
+  }
+}
+[dir="rtl"] .animate-marquee {
+  animation-name: marquee-rtl;
+}
+
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
@@ -81,5 +105,23 @@ body {
   *::after {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+/* Printing (invoices): only the page content, no site chrome or grain. */
+@media print {
+  body > header,
+  header.fixed,
+  footer,
+  [data-sonner-toaster],
+  nextjs-portal {
+    display: none !important;
+  }
+  .grain::after {
+    display: none;
+  }
+  html,
+  body {
+    background: #fff;
   }
 }

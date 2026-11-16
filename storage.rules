@@ -2,26 +2,40 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
+    // Raster images only (no SVG: it can carry scripts), under 5 MB.
     function isImage() {
-      return request.resource.contentType.matches('image/.*')
+      return request.resource.contentType.matches('image/(jpeg|png|webp|gif|avif)')
         && request.resource.size < 5 * 1024 * 1024;
+    }
+    function owner(uid) { return request.auth != null && request.auth.uid == uid; }
+    function hasStore(uid) {
+      return firestore.exists(/databases/(default)/documents/merchants/$(uid));
+    }
+    function isApprovedMerchant(uid) {
+      return hasStore(uid)
+        && firestore.get(/databases/(default)/documents/merchants/$(uid)).data.status == 'approved';
     }
     function isAdmin() {
       return request.auth != null
         && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
+    // Product photos: approved merchants, inside their own folder
     match /products/{uid}/{file} {
       allow read: if true;
-      allow write: if request.auth != null && request.auth.uid == uid && isImage();
+      allow create, update: if owner(uid) && isApprovedMerchant(uid) && isImage();
+      allow delete: if owner(uid);
     }
+    // Store logo / banner: any store owner (pending stores can set a logo)
     match /merchants/{uid}/{file} {
       allow read: if true;
-      allow write: if request.auth != null && request.auth.uid == uid && isImage();
+      allow create, update: if owner(uid) && hasStore(uid) && isImage();
+      allow delete: if owner(uid);
     }
     match /categories/{file} {
       allow read: if true;
-      allow write: if isAdmin() && isImage();
+      allow create, update: if isAdmin() && isImage();
+      allow delete: if isAdmin();
     }
   }
 }

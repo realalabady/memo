@@ -36,9 +36,11 @@ export async function getProducts(
     let q = adminDb().collection("products").where("status", "==", "active");
     if (filter.categoryId) q = q.where("categoryId", "==", filter.categoryId);
     if (filter.merchantId) q = q.where("merchantId", "==", filter.merchantId);
-    const snap = await q.get();
+    const [snap, approved] = await Promise.all([q.get(), approvedMerchantIds()]);
+    // Products of pending/suspended stores stay hidden even if the product itself is active.
     items = snap.docs
       .map((d) => ({ id: d.id, ...d.data() }) as Product)
+      .filter((p) => approved.has(p.merchantId))
       .sort((a, b) => b.createdAt - a.createdAt);
   }
   return filter.limit ? items.slice(0, filter.limit) : items;
@@ -52,7 +54,12 @@ export async function getProduct(id: string): Promise<Product | null> {
   const doc = await adminDb().collection("products").doc(id).get();
   if (!doc.exists) return null;
   const product = { id: doc.id, ...doc.data() } as Product;
-  return product.status === "active" ? product : null;
+  if (product.status !== "active") return null;
+  return (await approvedMerchantIds()).has(product.merchantId) ? product : null;
+}
+
+async function approvedMerchantIds() {
+  return new Set((await getMerchants()).map((m) => m.id));
 }
 
 export async function getMerchants(): Promise<Merchant[]> {

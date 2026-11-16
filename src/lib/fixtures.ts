@@ -86,6 +86,52 @@ export const demoProducts: Product[] = [
   p("p23", "m_bayt", "pantry", "Pour-Over Kit", 245, ["1509042239860-f550ce710b93"], "Glass dripper, gooseneck kettle and filters in a gift box."),
 ];
 
+/* Arabic content for the sample catalog (shown on /ar). */
+const arTitles: Record<string, string> = {
+  p01: "محفظة ويكند الجلدية",
+  p02: "حذاء فيلد — عاجي",
+  p03: "قميص الصحراء الخارجي",
+  p04: "تيشيرت ستوديو — 3 قطع",
+  p05: "عطر عود نوار المركّز",
+  p06: "طقم فرش ديزرت جلو",
+  p07: "كريم الجسم بورد الطائف",
+  p08: "زيت ريتشوال للوجه",
+  p09: "سويتشيرت كلاود",
+  p10: "سماعات هالو فوق الأذن",
+  p11: "ساعة بلس الذكية",
+  p12: "سماعات نوار اللاسلكية",
+  p13: "سماعات هالو لايت",
+  p14: "سماعات ستوديو اللاسلكية",
+  p15: "كنبة سيج",
+  p16: "كرسي آرك",
+  p17: "مقعد البلوط",
+  p18: "طقم الركن الهادئ",
+  p19: "ساعة فيلد البسيطة",
+  p20: "نظارة شمسية كلوبلاين",
+  p21: "إطارات أسيتات دائرية",
+  p22: "بن إثيوبيا قوجي",
+  p23: "طقم التقطير اليدوي",
+};
+for (const prod of demoProducts) prod.titleAr = arTitles[prod.id];
+
+const arCategories: Record<string, { nameAr: string; blurbAr: string }> = {
+  fashion: { nameAr: "الأزياء", blurbAr: "أحذية رياضية وملابس خارجية وإطلالات يومية" },
+  beauty: { nameAr: "الجمال والعطور", blurbAr: "عود وعناية بالبشرة وطقوس" },
+  electronics: { nameAr: "الإلكترونيات", blurbAr: "صوتيات وأجهزة قابلة للارتداء وتقنيات المكتب" },
+  home: { nameAr: "المنزل والمعيشة", blurbAr: "أثاث وقطع هادئة" },
+  accessories: { nameAr: "الإكسسوارات", blurbAr: "ساعات ونظارات وجلديات" },
+  pantry: { nameAr: "القهوة والمؤن", blurbAr: "بن مختص وهدايا" },
+};
+for (const cat of demoCategories) Object.assign(cat, arCategories[cat.id]);
+
+const arMerchants: Record<string, { taglineAr: string; bioAr: string }> = {
+  m_atelier: { taglineAr: "أساسيات صُنعت في الرياض", bioAr: "أحذية وملابس خارجية بكميات محدودة مصممة في الرياض." },
+  m_oud: { taglineAr: "عطور على مهل", bioAr: "عود ممزوج يدويًا وعطور حديثة من جدة." },
+  m_circuit: { taglineAr: "تقنية مدروسة", bioAr: "صوتيات وأجهزة قابلة للارتداء وتجهيزات مكتبية نستخدمها فعلًا." },
+  m_bayt: { taglineAr: "قطع لبيوت هادئة", bioAr: "أثاث وخزف وقهوة من صنّاع مستقلين." },
+};
+for (const mer of demoMerchants) Object.assign(mer, arMerchants[mer.id]);
+
 /* ───────────── demo ledger (client only — uses the current time) ───────────── */
 
 const demoCustomers = [

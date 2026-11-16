@@ -8,12 +8,15 @@ import { Crown, Storefront, User } from "@phosphor-icons/react";
 import { Logo } from "@/components/brand/logo";
 import { Bezel, Button, Field } from "@/components/ui/primitives";
 import { Reveal } from "@/components/ui/motion";
+import { useT } from "@/i18n/client";
 import { safeNext, useAuth } from "@/lib/auth/auth-provider";
 import type { Role } from "@/lib/types";
 
 const home: Record<Role, string> = { admin: "/admin", merchant: "/merchant", customer: "/account" };
 
 export function AuthForm({ mode }: { mode: "login" | "signup" }) {
+  const t = useT().auth;
+  const common = useT().common;
   const { signIn, signUp, signInWithGoogle, enterDemo, demo, profile } = useAuth();
   const router = useRouter();
   const next = safeNext(useSearchParams().get("next"));
@@ -51,29 +54,29 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
           <h1 className="font-display text-5xl leading-none">
             {mode === "login" ? (
               <>
-                Welcome <span className="italic">back.</span>
+                {t.welcome} <span className="italic">{t.welcomeEm}</span>
               </>
             ) : (
               <>
-                Join <span className="italic">memo.</span>
+                {t.join} <span className="italic">{t.joinEm}</span>
               </>
             )}
           </h1>
 
           {demo ? (
             <div className="mt-8 space-y-2">
-              <p className="mb-4 text-sm text-muted">Demo mode — pick a role to explore the dashboards with sample data.</p>
+              <p className="mb-4 text-sm text-muted">{t.demoNote}</p>
               {(
                 [
-                  { role: "admin", label: "Enter as Admin", sub: "Ledger, payouts, merchants", icon: Crown },
-                  { role: "merchant", label: "Enter as Merchant", sub: "Atelier Najd store", icon: Storefront },
-                  { role: "customer", label: "Enter as Customer", sub: "Orders & checkout", icon: User },
+                  { role: "admin", label: t.enterAdmin, sub: t.adminSub, icon: Crown },
+                  { role: "merchant", label: t.enterMerchant, sub: t.merchantSub, icon: Storefront },
+                  { role: "customer", label: t.enterCustomer, sub: t.customerSub, icon: User },
                 ] as const
               ).map(({ role, label, sub, icon: Icon }) => (
                 <button
                   key={role}
                   onClick={() => enterDemo(role)}
-                  className="group flex w-full items-center gap-4 rounded-3xl p-4 text-left ring-1 ring-ink/10 transition duration-500 ease-[var(--ease-fluid)] hover:bg-cream"
+                  className="group flex w-full items-center gap-4 rounded-3xl p-4 text-start ring-1 ring-ink/10 transition duration-500 ease-[var(--ease-fluid)] hover:bg-cream"
                 >
                   <span className="flex size-11 items-center justify-center rounded-full bg-ink text-paper transition group-hover:bg-ember">
                     <Icon weight="light" className="size-5" />
@@ -88,23 +91,23 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
           ) : (
             <>
               <form onSubmit={submit} className="mt-8 space-y-4">
-                {mode === "signup" && <Field label="Full name" name="name" required autoComplete="name" />}
-                <Field label="Email" name="email" type="email" required autoComplete="email" />
-                <Field label="Password" name="password" type="password" required minLength={8} autoComplete={mode === "login" ? "current-password" : "new-password"} />
+                {mode === "signup" && <Field label={t.fullName} name="name" required autoComplete="name" />}
+                <Field label={t.email} name="email" type="email" dir="ltr" required autoComplete="email" />
+                <Field label={t.password} name="password" type="password" dir="ltr" required minLength={8} autoComplete={mode === "login" ? "current-password" : "new-password"} />
                 <Button type="submit" disabled={busy} className="w-full justify-between">
-                  {mode === "login" ? "Sign in" : "Create account"}
+                  {mode === "login" ? common.signIn : t.createAccount}
                 </Button>
               </form>
               <div className="my-6 flex items-center gap-3 text-xs text-muted">
-                <span className="h-px flex-1 bg-ink/10" /> or <span className="h-px flex-1 bg-ink/10" />
+                <span className="h-px flex-1 bg-ink/10" /> {t.or} <span className="h-px flex-1 bg-ink/10" />
               </div>
               <Button variant="paper" trailing={false} disabled={busy} onClick={() => run(signInWithGoogle)} className="w-full">
-                Continue with Google
+                {t.google}
               </Button>
               <p className="mt-6 text-center text-sm text-muted">
-                {mode === "login" ? "New here? " : "Already have an account? "}
+                {mode === "login" ? t.newHere : t.haveAccount}{" "}
                 <Link href={mode === "login" ? "/signup" : "/login"} className="text-ink underline underline-offset-4">
-                  {mode === "login" ? "Create an account" : "Sign in"}
+                  {mode === "login" ? t.createLink : common.signIn}
                 </Link>
               </p>
             </>

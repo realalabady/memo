@@ -6,7 +6,10 @@ import { motion } from "motion/react";
 import { Suspense, useEffect, type ReactNode } from "react";
 import { SignOut, type Icon } from "@phosphor-icons/react";
 import { LogoMark } from "@/components/brand/logo";
+import { LanguageSwitch } from "@/components/language-switch";
 import { expo } from "@/components/ui/motion";
+import { stripLocale } from "@/i18n/config";
+import { useT } from "@/i18n/client";
 import { useAuth } from "@/lib/auth/auth-provider";
 import type { Role } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -37,14 +40,16 @@ export function DashboardShell(props: ShellProps) {
 }
 
 function Shell({ role, title, nav, children }: ShellProps) {
+  const t = useT().dash;
   const { profile, loading, signOut, demo } = useAuth();
-  const pathname = usePathname();
+  const rawPathname = usePathname();
+  const pathname = stripLocale(rawPathname);
   const router = useRouter();
   const allowed = profile?.role === role || (role === "merchant" && profile?.role === "admin");
 
   useEffect(() => {
     if (loading) return;
-    if (!profile) router.replace(`/login?next=${pathname}`);
+    if (!profile) router.replace(`/login?next=${encodeURIComponent(pathname)}`);
     else if (!allowed) router.replace(role === "merchant" ? "/sell" : "/");
   }, [loading, profile, allowed, router, pathname, role]);
 
@@ -58,7 +63,7 @@ function Shell({ role, title, nav, children }: ShellProps) {
           <Link href="/" className="hidden items-center gap-2 px-3 pb-6 pt-3 md:flex">
             <LogoMark className="size-6 text-paper" />
             <span className="font-display text-2xl italic">memo</span>
-            <span className="ml-auto rounded-full bg-white/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.15em] text-paper/60">{title}</span>
+            <span className="ms-auto rounded-full bg-white/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.15em] text-paper/60">{title}</span>
           </Link>
           <nav className="flex flex-row gap-1 md:flex-col">
             {nav.map(({ href, label, icon: Icon }) => {
@@ -80,7 +85,8 @@ function Shell({ role, title, nav, children }: ShellProps) {
             })}
           </nav>
           <div className="mt-auto hidden space-y-2 md:block">
-            {demo && <p className="rounded-2xl bg-white/5 px-3 py-2 text-[11px] text-paper/50">Demo mode · sample data</p>}
+            {demo && <p className="rounded-2xl bg-white/5 px-3 py-2 text-[11px] text-paper/50">{t.demoBadge}</p>}
+            <LanguageSwitch className="block text-paper/60 hover:bg-white/10 hover:text-paper" />
             <div className="flex items-center gap-3 rounded-2xl bg-white/5 p-3">
               <span className="flex size-9 items-center justify-center rounded-full bg-ember text-sm font-medium">
                 {(profile?.displayName ?? "?").slice(0, 1).toUpperCase()}
@@ -89,8 +95,8 @@ function Shell({ role, title, nav, children }: ShellProps) {
                 <p className="truncate text-[13px]">{profile?.displayName}</p>
                 <p className="truncate text-[11px] text-paper/50">{profile?.email}</p>
               </div>
-              <button aria-label="Sign out" onClick={() => signOut().then(() => router.push("/"))} className="text-paper/50 hover:text-paper">
-                <SignOut weight="light" className="size-[18px]" />
+              <button aria-label={t.signOut} onClick={() => signOut().then(() => router.push("/"))} className="text-paper/50 hover:text-paper">
+                <SignOut weight="light" className="size-[18px] rtl:-scale-x-100" />
               </button>
             </div>
           </div>

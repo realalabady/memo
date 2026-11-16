@@ -66,8 +66,8 @@ function buttonClasses(variant: Variant, size: "md" | "lg" | "sm", className?: s
   return cn(
     "group relative inline-flex items-center justify-center gap-3 rounded-full font-medium",
     "transition-all duration-500 ease-[var(--ease-fluid)] active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50",
-    size === "lg" && "h-14 pl-7 pr-2 text-[15px]",
-    size === "md" && "h-12 pl-6 pr-1.5 text-sm",
+    size === "lg" && "h-14 ps-7 pe-2 text-[15px]",
+    size === "md" && "h-12 ps-6 pe-1.5 text-sm",
     size === "sm" && "h-9 px-4 text-[13px]",
     variants[variant].btn,
     className,
@@ -80,11 +80,11 @@ function TrailingIcon({ variant, icon }: { variant: Variant; icon?: ReactNode })
     <span
       className={cn(
         "flex size-9 items-center justify-center rounded-full transition-transform duration-500 ease-[var(--ease-fluid)]",
-        "group-hover:translate-x-0.5 group-hover:-translate-y-px group-hover:scale-105",
+        "group-hover:translate-x-0.5 rtl:group-hover:-translate-x-0.5 group-hover:-translate-y-px group-hover:scale-105",
         variants[variant].icon,
       )}
     >
-      {icon ?? <ArrowUpRight weight="light" className="size-4" />}
+      {icon ?? <ArrowUpRight weight="light" className="size-4 rtl:-scale-x-100" />}
     </span>
   );
 }
@@ -191,26 +191,4 @@ export function ProviderChip({ provider, className }: { provider: "tabby" | "tam
   );
 }
 
-const tones: Record<string, string> = {
-  captured: "bg-sage-soft text-[#4c5a3f]",
-  paid: "bg-sage-soft text-[#4c5a3f]",
-  approved: "bg-sage-soft text-[#4c5a3f]",
-  delivered: "bg-sage-soft text-[#4c5a3f]",
-  active: "bg-sage-soft text-[#4c5a3f]",
-  pending: "bg-sand text-ink-2",
-  unpaid: "bg-ember-soft text-[#8f321a]",
-  shipped: "bg-[#e3e6f2] text-[#3d4673]",
-  draft: "bg-sand text-ink-2",
-  failed: "bg-ink/5 text-muted line-through",
-  cancelled: "bg-ink/5 text-muted line-through",
-  suspended: "bg-ink text-paper",
-  on_hold: "bg-ink text-paper",
-};
-
-export function StatusPill({ status }: { status: string }) {
-  return (
-    <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-medium capitalize", tones[status] ?? "bg-ink/5")}>
-      {status.replace("_", " ")}
-    </span>
-  );
-}
+export { StatusPill } from "./status-pill";

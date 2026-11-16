@@ -16,6 +16,7 @@ import { demoCategories, demoLedger, demoMerchants, demoProducts } from "@/lib/f
 import {
   DEFAULT_SETTINGS,
   type Category,
+  type LedgerAdjustment,
   type Merchant,
   type MerchantBank,
   type MerchantOrder,
@@ -85,6 +86,17 @@ export function usePayouts(merchantId?: string | null) {
   );
 }
 
+/** Open refund clawbacks for a merchant (deducted from their next payout). */
+export function useOpenAdjustments(merchantId: string | null) {
+  return useLive<LedgerAdjustment>(
+    merchantId
+      ? () => query(collection(db(), "ledgerAdjustments"), where("merchantId", "==", merchantId), where("status", "==", "open"))
+      : null,
+    () => [],
+    [merchantId],
+  );
+}
+
 export function useCustomerOrders(customerId: string | null) {
   return useLive<Order>(
     customerId ? () => query(collection(db(), "orders"), where("customerId", "==", customerId)) : null,
@@ -109,11 +121,12 @@ export function useCustomerOrders(customerId: string | null) {
 }
 
 export function useMerchantProducts(merchantId: string | null) {
-  return useLive<Product>(
+  const live = useLive<Product>(
     merchantId ? () => query(collection(db(), "products"), where("merchantId", "==", merchantId)) : null,
     () => demoProducts.filter((p) => p.merchantId === merchantId),
     [merchantId],
   );
+  return { ...live, data: live.data.filter((p) => p.status !== "archived") };
 }
 
 export function useMerchants() {

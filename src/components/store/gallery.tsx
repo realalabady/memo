@@ -4,9 +4,12 @@ import Image from "next/image";
 import { AnimatePresence, motion } from "motion/react";
 import { useState } from "react";
 import { expo } from "@/components/ui/motion";
+import { useT } from "@/i18n/client";
+import { fmt } from "@/i18n/dictionaries";
 import { cn } from "@/lib/utils";
 
 export function Gallery({ images, title }: { images: string[]; title: string }) {
+  const t = useT().product;
   const [active, setActive] = useState(0);
   return (
     <div className="space-y-3">
@@ -32,7 +35,7 @@ export function Gallery({ images, title }: { images: string[]; title: string }) 
             <button
               key={src}
               onClick={() => setActive(i)}
-              aria-label={`Image ${i + 1}`}
+              aria-label={fmt(t.image, { n: i + 1 })}
               className={cn("relative size-20 overflow-hidden rounded-2xl ring-2 transition", i === active ? "ring-ink" : "ring-transparent opacity-60 hover:opacity-100")}
             >
               <Image src={src} alt="" fill sizes="80px" className="object-cover" />

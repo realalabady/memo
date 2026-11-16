@@ -12,36 +12,37 @@ import {
   SquaresFour,
   Storefront,
 } from "@phosphor-icons/react";
+import { useT } from "@/i18n/client";
 import { DashboardShell } from "./shell";
 
-const adminNav = [
-  { href: "/admin", label: "Overview", icon: ChartPieSlice },
-  { href: "/admin/transactions", label: "Transactions", icon: ListBullets },
-  { href: "/admin/payouts", label: "Payouts", icon: Bank },
-  { href: "/admin/merchants", label: "Merchants", icon: Storefront },
-  { href: "/admin/categories", label: "Categories", icon: SquaresFour },
-  { href: "/admin/settings", label: "Settings", icon: Gear },
-];
-
-const merchantNav = [
-  { href: "/merchant", label: "Overview", icon: ChartLineUp },
-  { href: "/merchant/products", label: "Products", icon: Package },
-  { href: "/merchant/orders", label: "Orders", icon: Receipt },
-  { href: "/merchant/payouts", label: "Payouts", icon: Bank },
-  { href: "/merchant/settings", label: "Store", icon: Gear },
-];
-
 export function AdminShell({ children }: { children: ReactNode }) {
+  const t = useT().dash;
+  const nav = [
+    { href: "/admin", label: t.navAdmin.overview, icon: ChartPieSlice },
+    { href: "/admin/transactions", label: t.navAdmin.transactions, icon: ListBullets },
+    { href: "/admin/payouts", label: t.navAdmin.payouts, icon: Bank },
+    { href: "/admin/merchants", label: t.navAdmin.merchants, icon: Storefront },
+    { href: "/admin/categories", label: t.navAdmin.categories, icon: SquaresFour },
+    { href: "/admin/settings", label: t.navAdmin.settings, icon: Gear },
+  ];
   return (
-    <DashboardShell role="admin" title="Admin" nav={adminNav}>
+    <DashboardShell role="admin" title={t.adminTitle} nav={nav}>
       {children}
     </DashboardShell>
   );
 }
 
 export function MerchantShell({ children }: { children: ReactNode }) {
+  const t = useT().dash;
+  const nav = [
+    { href: "/merchant", label: t.navMerchant.overview, icon: ChartLineUp },
+    { href: "/merchant/products", label: t.navMerchant.products, icon: Package },
+    { href: "/merchant/orders", label: t.navMerchant.orders, icon: Receipt },
+    { href: "/merchant/payouts", label: t.navMerchant.payouts, icon: Bank },
+    { href: "/merchant/settings", label: t.navMerchant.store, icon: Gear },
+  ];
   return (
-    <DashboardShell role="merchant" title="Store" nav={merchantNav}>
+    <DashboardShell role="merchant" title={t.storeTitle} nav={nav}>
       {children}
     </DashboardShell>
   );

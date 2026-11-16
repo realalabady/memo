@@ -1,24 +1,19 @@
 import { appUrl } from "@/lib/server/auth";
-import { markOrderFailed, settleTamara } from "@/lib/server/orders";
+import { settleTamara } from "@/lib/server/orders";
 
-/** Tamara appends `orderId` (its own id) and `paymentStatus`. settleTamara verifies with the API before recording. */
+/**
+ * Tamara appends `orderId` (its own id) and `paymentStatus`. Public and unauthenticated, so the
+ * query string is never trusted: settleTamara asks Tamara for the real status before recording
+ * anything. The result page then reads the order's actual status from the server.
+ */
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const ref = url.searchParams.get("ref");
   const tamaraOrderId = url.searchParams.get("orderId");
-  const status = url.searchParams.get("paymentStatus");
-  const go = (s: string) => Response.redirect(`${appUrl()}/checkout/result?order=${ref}&status=${s}`, 303);
-
   if (!ref) return Response.redirect(`${appUrl()}/`, 303);
-  try {
-    if (status === "approved" && tamaraOrderId) {
-      return go(await settleTamara(ref, tamaraOrderId));
-    }
-    const cancelled = status === "canceled" || status === "cancelled";
-    await markOrderFailed(ref, cancelled ? "cancelled" : "failed", `Tamara ${status}`);
-    return go(cancelled ? "cancelled" : "failed");
-  } catch (err) {
-    console.error(err);
-    return go("failed");
+
+  if (tamaraOrderId) {
+    await settleTamara(ref, tamaraOrderId).catch((err) => console.error("tamara return", err));
   }
+  return Response.redirect(`${appUrl()}/checkout/result?order=${encodeURIComponent(ref)}`, 303);
 }

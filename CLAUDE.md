@@ -30,6 +30,10 @@ Multi-store marketplace for Saudi Arabia: independent stores sell, shoppers pay 
 - Change roles only via `setRoleClaims` (`src/lib/server/roles.ts`); admins must never be demoted by store status changes.
 - Money math in halalas (`money.ts`), amounts sent to providers as 2-decimal values, currency SAR.
 - Settlement must stay idempotent: return URL and webhook can both fire for the same payment.
+- Prices are VAT-inclusive; `computeSplit`/`vatIncluded` (`money.ts`) record the VAT, they never add it on top.
+- Refunds go through `refundOrder` (`src/lib/server/refunds.ts`): claim → provider → record. `refunded` is a final state. A refund on an already-paid-out row creates a `ledgerAdjustments` clawback netted into the next payout.
+- A ledger row is payable only when `payoutEligibility` says so (paid, delivered, past `settings.payoutHoldDays`, not on hold).
+- Webhooks are de-duplicated and logged via `handleOnce` (`paymentEvents`); the body is a hint, always re-read the payment from the provider.
 - After catalog writes, revalidate the `catalog` cache tag.
 - Demo mode = no Firebase keys (development only). `PAYMENTS_DEMO` is ignored in production and `src/instrumentation.ts` refuses to boot with it.
 - Any change to `firestore.rules`/`storage.rules` needs a matching test in `tests/rules/`.

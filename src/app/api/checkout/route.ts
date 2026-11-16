@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { isAdminConfigured } from "@/lib/firebase/admin";
+import { adminDb, isAdminConfigured } from "@/lib/firebase/admin";
 import { demoProducts } from "@/lib/fixtures";
 import { providerAvailable } from "@/lib/money";
 import { shouldSimulate } from "@/lib/payments";
@@ -11,6 +11,8 @@ import { round2 } from "@/lib/utils";
 
 const schema = z.object({
   provider: z.enum(["tabby", "tamara"]),
+  /** Shopper's UI language — the provider's hosted page opens in the same language. */
+  lang: z.enum(["ar", "en"]).default("ar"),
   items: z
     .array(z.object({ productId: z.string().min(1), quantity: z.number().int().min(1).max(20) }))
     .min(1)
@@ -30,7 +32,7 @@ export async function POST(req: Request) {
   try {
     const body = schema.safeParse(await req.json());
     if (!body.success) throw new HttpError(400, "Please complete all checkout fields");
-    const { provider, items, customer } = body.data;
+    const { provider, items, customer, lang } = body.data;
 
     // Demo mode (no Firebase): price from sample data and go straight to the simulator.
     if (!isAdminConfigured) {
@@ -62,10 +64,11 @@ export async function POST(req: Request) {
       });
     }
 
+    const profile = await adminDb().collection("users").doc(user.uid).get();
     const session =
       provider === "tabby"
-        ? await createTabbySession(order, appUrl())
-        : await createTamaraCheckout(order, appUrl());
+        ? await createTabbySession(order, appUrl(), profile.data()?.createdAt as number | undefined, lang)
+        : await createTamaraCheckout(order, appUrl(), lang);
 
     if (!session.ok) {
       await markOrderFailed(order.id, "failed", session.reason);

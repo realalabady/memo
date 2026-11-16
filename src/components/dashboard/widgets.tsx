@@ -4,14 +4,17 @@ import { animate, motion, useInView, useMotionValue, useTransform } from "motion
 import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import { expo } from "@/components/ui/motion";
 import type { MerchantOrder } from "@/lib/types";
-import { cn, formatSAR } from "@/lib/utils";
+import { useFormat, useT } from "@/i18n/client";
+import { cn } from "@/lib/utils";
 
 /** Count-up number that animates when scrolled into view. */
-export function CountUp({ value, format = (n) => formatSAR(Math.round(n)) }: { value: number; format?: (n: number) => string }) {
+export function CountUp({ value, format }: { value: number; format?: (n: number) => string }) {
+  const { money } = useFormat();
+  const fmtValue = format ?? ((n: number) => money(Math.round(n)));
   const ref = useRef<HTMLSpanElement>(null);
   const inView = useInView(ref, { once: true });
   const mv = useMotionValue(0);
-  const text = useTransform(mv, (v) => format(v));
+  const text = useTransform(mv, (v) => fmtValue(v));
   useEffect(() => {
     if (!inView) return;
     const controls = animate(mv, value, { duration: 1.4, ease: expo });
@@ -61,7 +64,9 @@ export function StatCard({
 }
 
 /** Daily revenue area chart drawn in SVG; the line draws itself in. */
-export function RevenueChart({ orders, days = 14, title = "Sales, last 14 days" }: { orders: MerchantOrder[]; days?: number; title?: string }) {
+export function RevenueChart({ orders, days = 14, title }: { orders: MerchantOrder[]; days?: number; title?: string }) {
+  const t = useT();
+  const { money, date } = useFormat();
   const series = useMemo(() => {
     const dayMs = 86_400_000;
     const end = new Date();
@@ -90,8 +95,8 @@ export function RevenueChart({ orders, days = 14, title = "Sales, last 14 days" 
     <div className="rounded-[1.75rem] bg-ink/[0.03] p-1.5 ring-1 ring-ink/[0.06]">
       <div className="rounded-[calc(1.75rem-0.375rem)] bg-paper p-5 shadow-[var(--shadow-inset)]">
         <div className="flex items-baseline justify-between">
-          <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted">{title}</p>
-          <p className="font-display text-2xl tabular-nums">{formatSAR(Math.round(total))}</p>
+          <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted">{title ?? t.dash.chartTitle}</p>
+          <p className="font-display text-2xl tabular-nums">{money(Math.round(total))}</p>
         </div>
         <svg viewBox={`0 0 ${W} ${H}`} className="mt-4 h-44 w-full overflow-visible" preserveAspectRatio="none">
           <defs>
@@ -116,8 +121,8 @@ export function RevenueChart({ orders, days = 14, title = "Sales, last 14 days" 
           />
         </svg>
         <div className="mt-2 flex justify-between text-[10px] text-muted">
-          <span>{new Date(series[0].t).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}</span>
-          <span>Today</span>
+          <span>{date(series[0].t)}</span>
+          <span>{t.common.today}</span>
         </div>
       </div>
     </div>
@@ -147,13 +152,14 @@ export function Panel({ title, actions, children, className }: { title?: ReactNo
 
 /** Horizontally-scrollable table wrapper with consistent styling */
 export function Table({ head, children, empty }: { head: string[]; children: ReactNode; empty?: boolean }) {
+  const t = useT();
   return (
     <div className="overflow-x-auto px-2 pb-2">
-      <table className="w-full min-w-[720px] text-left text-[13px]">
+      <table className="w-full min-w-[720px] text-start text-[13px]">
         <thead>
           <tr className="text-[10px] uppercase tracking-[0.14em] text-muted">
             {head.map((h) => (
-              <th key={h} className="px-3 py-3 font-medium">
+              <th key={h} className="px-3 py-3 text-start font-medium">
                 {h}
               </th>
             ))}
@@ -161,7 +167,7 @@ export function Table({ head, children, empty }: { head: string[]; children: Rea
         </thead>
         <tbody className="[&>tr]:border-t [&>tr]:border-ink/[0.05] [&>tr:hover]:bg-cream/50 [&_td]:px-3 [&_td]:py-3">{children}</tbody>
       </table>
-      {empty && <p className="py-12 text-center text-sm text-muted">Nothing here yet.</p>}
+      {empty && <p className="py-12 text-center text-sm text-muted">{t.dash.tableEmpty}</p>}
     </div>
   );
 }

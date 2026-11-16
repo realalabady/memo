@@ -1,9 +1,17 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
+import { localized } from "@/i18n/config";
+import { useFormat, useT } from "@/i18n/client";
+import { fmt } from "@/i18n/dictionaries";
 import type { Product } from "@/lib/types";
-import { formatSAR, installment } from "@/lib/utils";
+import { installment } from "@/lib/utils";
 
 export function ProductCard({ product, priority }: { product: Product; priority?: boolean }) {
+  const t = useT();
+  const { money, lang } = useFormat();
+  const title = localized(product, "title", lang);
   const off = product.compareAtPrice ? Math.round((1 - product.price / product.compareAtPrice) * 100) : 0;
   return (
     <Link href={`/product/${product.id}`} className="group block">
@@ -12,7 +20,7 @@ export function ProductCard({ product, priority }: { product: Product; priority?
           {product.images[0] && (
             <Image
               src={product.images[0]}
-              alt={product.title}
+              alt={title}
               fill
               priority={priority}
               sizes="(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw"
@@ -20,24 +28,24 @@ export function ProductCard({ product, priority }: { product: Product; priority?
             />
           )}
           {off > 0 && (
-            <span className="absolute left-3 top-3 rounded-full bg-ember px-2.5 py-1 text-[11px] font-medium text-paper">
+            <span className="absolute start-3 top-3 rounded-full bg-ember px-2.5 py-1 text-[11px] font-medium text-paper">
               −{off}%
             </span>
           )}
           <span className="absolute inset-x-3 bottom-3 translate-y-3 rounded-full bg-paper/90 px-4 py-2 text-center text-[12px] opacity-0 backdrop-blur transition-all duration-500 ease-[var(--ease-fluid)] group-hover:translate-y-0 group-hover:opacity-100">
-            4 × {formatSAR(installment(product.price), { decimals: true })} with tabby / tamara
+            {fmt(t.product.cardPlan, { amount: money(installment(product.price), { decimals: true }) })}
           </span>
         </div>
       </div>
       <div className="flex items-start justify-between gap-3 px-2 pt-4">
         <div className="min-w-0">
-          <h3 className="truncate text-[15px] font-medium">{product.title}</h3>
+          <h3 className="truncate text-[15px] font-medium">{title}</h3>
           <p className="text-[13px] text-muted">{product.merchantName}</p>
         </div>
-        <div className="text-right">
-          <p className="text-[15px] tabular-nums">{formatSAR(product.price)}</p>
+        <div className="shrink-0 text-end">
+          <p className="text-[15px] tabular-nums">{money(product.price)}</p>
           {product.compareAtPrice && (
-            <p className="text-[12px] text-muted line-through tabular-nums">{formatSAR(product.compareAtPrice)}</p>
+            <p className="text-[12px] text-muted line-through tabular-nums">{money(product.compareAtPrice)}</p>
           )}
         </div>
       </div>
@@ -46,11 +54,12 @@ export function ProductCard({ product, priority }: { product: Product; priority?
 }
 
 export function ProductGrid({ products }: { products: Product[] }) {
+  const t = useT().listing;
   if (!products.length) {
     return (
       <div className="rounded-[2rem] bg-cream/60 px-6 py-24 text-center">
-        <p className="font-display text-3xl italic">Nothing on the shelf yet.</p>
-        <p className="mt-2 text-sm text-muted">Check back soon — new stores join every week.</p>
+        <p className="font-display text-3xl italic">{t.emptyTitle}</p>
+        <p className="mt-2 text-sm text-muted">{t.emptyBody}</p>
       </div>
     );
   }

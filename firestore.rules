@@ -1,60 +1,60 @@
 rules_version = '2';
 
-// Money-moving writes (orders, ledger payment status, payouts) happen only on the
-// server through the Admin SDK, which bypasses these rules.
+// Security model
+// - Anything touching money, roles, store identity, products, fulfilment or payouts is written
+//   ONLY by the server (Admin SDK in src/app/api/**), which bypasses these rules.
+// - Clients may write: their own profile (safe fields), and admins may write categories.
+// - Reads are scoped to owners / admins; the public sees active catalog data only.
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
     function uid() { return request.auth.uid; }
-    function userDoc() { return get(/databases/$(database)/documents/users/$(uid())); }
     function isAdmin() {
       return signedIn()
         && exists(/databases/$(database)/documents/users/$(uid()))
-        && userDoc().data.role == 'admin';
-    }
-    function isApprovedMerchant() {
-      return signedIn()
-        && exists(/databases/$(database)/documents/merchants/$(uid()))
-        && get(/databases/$(database)/documents/merchants/$(uid())).data.status == 'approved';
+        && get(/databases/$(database)/documents/users/$(uid())).data.role == 'admin';
     }
     function changes() { return request.resource.data.diff(resource.data).affectedKeys(); }
 
     match /users/{userId} {
       allow read: if signedIn() && (uid() == userId || isAdmin());
-      allow create: if isAdmin();
-      // created by /api/auth/bootstrap; users may edit their profile but never their role
-      allow update: if isAdmin() || (signedIn() && uid() == userId && !changes().hasAny(['role', 'uid', 'email']));
+      // created by /api/auth/bootstrap; users may edit safe profile fields only
+      allow update: if signedIn() && uid() == userId
+        && changes().hasOnly(['displayName', 'phone'])
+        && (!('displayName' in request.resource.data) || (request.resource.data.displayName is string && request.resource.data.displayName.size() <= 80))
+        && (!('phone' in request.resource.data) || (request.resource.data.phone is string && request.resource.data.phone.size() <= 20));
+      allow create, delete: if false;
     }
 
     match /merchants/{merchantId} {
       allow read: if true;
-      allow create: if signedIn() && uid() == merchantId
-        && request.resource.data.status == 'pending'
-        && !('commissionRate' in request.resource.data);
-      allow update: if isAdmin()
-        || (signedIn() && uid() == merchantId && !changes().hasAny(['status', 'commissionRate', 'slug']));
+      allow write: if false; // /api/merchant/apply, /api/merchant/profile, /api/admin/merchants/[id]
 
-      // Bank details: owner + admin only
+      // Bank details: owner + admin may read; writes via /api/merchant/bank (audited)
       match /private/{docId} {
-        allow read, write: if signedIn() && (uid() == merchantId || isAdmin());
+        allow read: if signedIn() && (uid() == merchantId || isAdmin());
+        allow write: if false;
       }
+    }
+
+    match /slugs/{slug} {
+      allow read, write: if false;
     }
 
     match /categories/{id} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if isAdmin()
+        && request.resource.data.name is string && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 60
+        && request.resource.data.slug is string && request.resource.data.slug.size() > 0
+        && request.resource.data.order is number;
+      allow delete: if isAdmin();
     }
 
     match /products/{id} {
       allow read: if resource.data.status == 'active'
         || (signedIn() && (resource.data.merchantId == uid() || isAdmin()));
-      allow create: if isApprovedMerchant()
-        && request.resource.data.merchantId == uid()
-        && request.resource.data.price is number && request.resource.data.price > 0
-        && request.resource.data.stock is int && request.resource.data.stock >= 0;
-      allow update: if isAdmin()
-        || (isApprovedMerchant() && resource.data.merchantId == uid() && request.resource.data.merchantId == uid());
-      allow delete: if isAdmin() || (signedIn() && resource.data.merchantId == uid());
+      allow write: if false; // /api/merchant/products
     }
 
     match /orders/{id} {
@@ -63,12 +63,10 @@ service cloud.firestore {
     }
 
     match /merchantOrders/{id} {
-      allow read: if signedIn() && (resource.data.merchantId == uid() || isAdmin());
-      // merchants can only move fulfilment forward
-      allow update: if signedIn() && resource.data.merchantId == uid()
-        && changes().hasOnly(['fulfillmentStatus', 'trackingNumber', 'updatedAt'])
-        && request.resource.data.fulfillmentStatus in ['pending', 'shipped', 'delivered'];
-      allow create, delete: if false;
+      // merchant sees their rows, the customer sees their own (tracking), admin sees all
+      allow read: if signedIn()
+        && (resource.data.merchantId == uid() || resource.data.customerId == uid() || isAdmin());
+      allow write: if false; // /api/merchant/orders/[id]/fulfillment
     }
 
     match /payouts/{id} {
@@ -76,9 +74,24 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Refund clawbacks deducted from a store's next payout
+    match /ledgerAdjustments/{id} {
+      allow read: if signedIn() && (resource.data.merchantId == uid() || isAdmin());
+      allow write: if false; // written by refunds, applied by /api/admin/payouts
+    }
+
     match /settings/{id} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if false; // /api/admin/settings
+    }
+
+    match /auditLogs/{id} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    match /paymentEvents/{id} {
+      allow read, write: if false;
     }
   }
 }

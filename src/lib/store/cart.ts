@@ -7,6 +7,7 @@ import type { Product } from "@/lib/types";
 export interface CartLine {
   productId: string;
   title: string;
+  titleAr?: string;
   image?: string;
   price: number;
   merchantName: string;
@@ -38,6 +39,7 @@ export const useCart = create<CartState>()(
                 {
                   productId: p.id,
                   title: p.title,
+                  ...(p.titleAr ? { titleAr: p.titleAr } : {}),
                   image: p.images[0],
                   price: p.price,
                   merchantName: p.merchantName,
