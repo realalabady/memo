@@ -1,7 +1,7 @@
 import "server-only";
 import { FieldValue } from "firebase-admin/firestore";
 import { revalidateTag } from "next/cache";
-import { adminDb } from "@/lib/firebase/admin";
+import { adminBucket, adminDb } from "@/lib/firebase/admin";
 import type { Merchant } from "@/lib/types";
 import { HttpError, requireUser } from "./auth";
 
@@ -47,3 +47,20 @@ export const slugify = (s: string) =>
     .replace(/[^\p{L}\p{N}]+/gu, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 48);
+
+/**
+ * Best-effort removal of uploaded images that are no longer referenced.
+ * Only touches objects under `prefix` (the caller's own folder), so a crafted URL can't delete someone else's file.
+ */
+export async function deleteStoredImages(urls: string[], prefix: string) {
+  const bucket = adminBucket();
+  if (!bucket) return;
+  await Promise.all(
+    urls.map(async (url) => {
+      const match = /\/o\/([^?]+)/.exec(url);
+      const path = match ? decodeURIComponent(match[1]) : "";
+      if (!path.startsWith(prefix)) return;
+      await bucket.file(path).delete({ ignoreNotFound: true }).catch((err) => console.error("image cleanup failed", path, err));
+    }),
+  );
+}

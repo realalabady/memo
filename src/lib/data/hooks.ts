@@ -12,6 +12,7 @@ import {
 } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import { db, isFirebaseConfigured } from "@/lib/firebase/client";
+import { LEGAL_SLUGS, withLegalDefaults, type LegalPage } from "@/lib/legal";
 import { demoCategories, demoLedger, demoMerchants, demoProducts } from "@/lib/fixtures";
 import {
   DEFAULT_SETTINGS,
@@ -19,11 +20,18 @@ import {
   type LedgerAdjustment,
   type Merchant,
   type MerchantBank,
+  type MerchantContact,
   type MerchantOrder,
   type Order,
   type Payout,
   type PlatformSettings,
   type Product,
+  type SavedAddress,
+  type AuditLog,
+  type StorefrontSettings,
+  type UserProfile,
+  DEFAULT_STOREFRONT,
+  withStorefrontDefaults,
 } from "@/lib/types";
 
 interface Live<T> {
@@ -94,6 +102,15 @@ export function useOpenAdjustments(merchantId: string | null) {
       : null,
     () => [],
     [merchantId],
+  );
+}
+
+/** The signed-in shopper's saved delivery addresses. */
+export function useAddresses(uid: string | null) {
+  return useLive<SavedAddress>(
+    uid ? () => query(collection(db(), "users", uid, "addresses")) : null,
+    () => [],
+    [uid],
   );
 }
 
@@ -183,4 +200,48 @@ export function useMerchantBank(merchantId: string | null) {
     merchantId ? ["merchants", merchantId, "private", "bank"] : null,
     isFirebaseConfigured ? emptyBank : demoBank,
   );
+}
+
+const emptyContact: MerchantContact = { email: "", phone: "", crNumber: "", updatedAt: 0 };
+
+/** Private contact + business registration details (owner and admins only). */
+export function useMerchantContact(merchantId: string | null) {
+  return useDoc<MerchantContact>(merchantId ? ["merchants", merchantId, "private", "contact"] : null, emptyContact);
+}
+
+/** Home page settings (settings/storefront), with defaults for anything missing. */
+export function useStorefront() {
+  const live = useDoc<StorefrontSettings>(["settings", "storefront"], DEFAULT_STOREFRONT);
+  return { ...live, data: withStorefrontDefaults(live.data) };
+}
+
+/** Admin: every product that isn't deleted, any store, any status. */
+export function useAllProducts() {
+  const live = useLive<Product>(() => query(collection(db(), "products")), () => demoProducts, []);
+  return { ...live, data: live.data.filter((p) => p.status !== "archived") };
+}
+
+/** Admin: the newest 500 accounts. */
+export function useUsers() {
+  return useLive<UserProfile & { id: string }>(
+    () => query(collection(db(), "users"), orderBy("createdAt", "desc"), limit(500)),
+    () => [
+      { id: "admin", uid: "admin", email: "admin@memo.sa", displayName: "Memo Admin", role: "admin", createdAt: Date.now() - 90 * 86_400_000 },
+      ...demoMerchants.map((m) => ({ id: m.id, uid: m.id, email: `owner@${m.slug}.sa`, displayName: m.storeName, role: "merchant" as const, createdAt: m.createdAt })),
+      { id: "c0", uid: "c0", email: "noura@example.com", displayName: "Noura Al-Harbi", role: "customer", createdAt: Date.now() - 12 * 86_400_000 },
+    ],
+    [],
+  );
+}
+
+/** Admin: the newest 200 audit entries. */
+export function useAuditLogs() {
+  return useLive<AuditLog>(() => query(collection(db(), "auditLogs"), orderBy("createdAt", "desc"), limit(200)), () => [], []);
+}
+
+/** Admin: every legal/policy page, edited version or built-in text. */
+export function useLegalPages() {
+  const live = useLive<Partial<LegalPage> & { id: string; createdAt?: number }>(() => query(collection(db(), "pages")), () => [], []);
+  const data = LEGAL_SLUGS.map((slug) => withLegalDefaults(slug, live.data.find((p) => p.id === slug)));
+  return { ...live, data };
 }

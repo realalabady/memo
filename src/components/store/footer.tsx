@@ -11,6 +11,15 @@ export function StoreFooter() {
     { title: t.shop, links: [[t.allProducts, "/shop"], [t.categories, "/#categories"], [t.payIn4, "/#how"]] },
     { title: t.sell, links: [[t.openStore, "/sell"], [t.merchantHub, "/merchant"]] },
     { title: t.account, links: [[t.signIn, "/login"], [t.myOrders, "/account"]] },
+    {
+      title: t.help,
+      links: [
+        [t.shipping, "/legal/shipping"],
+        [t.returns, "/legal/returns"],
+        [t.privacy, "/legal/privacy"],
+        [t.terms, "/legal/terms"],
+      ],
+    },
   ];
   return (
     <footer className="mt-auto px-4 pb-6 pt-24">
@@ -22,7 +31,7 @@ export function StoreFooter() {
               <span className="block italic text-ember">{t.line2}</span>
             </p>
           </div>
-          <div className="grid grid-cols-2 gap-8 text-sm md:col-span-6 md:grid-cols-3">
+          <div className="grid grid-cols-2 gap-8 text-sm md:col-span-6 md:grid-cols-4">
             {columns.map((c) => (
               <div key={c.title}>
                 <p className="mb-4 text-[10px] uppercase tracking-[0.2em] text-paper/40">{c.title}</p>

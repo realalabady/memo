@@ -3,7 +3,7 @@ rules_version = '2';
 // Security model
 // - Anything touching money, roles, store identity, products, fulfilment or payouts is written
 //   ONLY by the server (Admin SDK in src/app/api/**), which bypasses these rules.
-// - Clients may write: their own profile (safe fields), and admins may write categories.
+// - Clients may write: their own profile (safe fields), addresses and wishlist.
 // - Reads are scoped to owners / admins; the public sees active catalog data only.
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -24,6 +24,26 @@ service cloud.firestore {
         && (!('displayName' in request.resource.data) || (request.resource.data.displayName is string && request.resource.data.displayName.size() <= 80))
         && (!('phone' in request.resource.data) || (request.resource.data.phone is string && request.resource.data.phone.size() <= 20));
       allow create, delete: if false;
+
+      // Saved delivery addresses (owner only, max ~10 fields of short text)
+      match /addresses/{addressId} {
+        allow read, delete: if signedIn() && uid() == userId;
+        allow create, update: if signedIn() && uid() == userId
+          && request.resource.data.keys().hasOnly(['firstName', 'lastName', 'email', 'phone', 'city', 'line1', 'zip', 'label', 'createdAt'])
+          && request.resource.data.firstName is string && request.resource.data.firstName.size() <= 60
+          && request.resource.data.lastName is string && request.resource.data.lastName.size() <= 60
+          && request.resource.data.phone is string && request.resource.data.phone.size() <= 20
+          && request.resource.data.city is string && request.resource.data.city.size() <= 60
+          && request.resource.data.line1 is string && request.resource.data.line1.size() <= 200;
+      }
+
+      // Wishlist: one doc per saved product, id = productId
+      match /wishlist/{productId} {
+        allow read, delete: if signedIn() && uid() == userId;
+        allow create, update: if signedIn() && uid() == userId
+          && request.resource.data.keys().hasOnly(['productId', 'createdAt'])
+          && request.resource.data.productId == productId;
+      }
     }
 
     match /merchants/{merchantId} {
@@ -43,18 +63,19 @@ service cloud.firestore {
 
     match /categories/{id} {
       allow read: if true;
-      allow write: if isAdmin()
-        && request.resource.data.name is string && request.resource.data.name.size() > 0
-        && request.resource.data.name.size() <= 60
-        && request.resource.data.slug is string && request.resource.data.slug.size() > 0
-        && request.resource.data.order is number;
-      allow delete: if isAdmin();
+      allow write: if false; // /api/admin/categories (unique slugs, safe delete, cache refresh)
     }
 
     match /products/{id} {
       allow read: if resource.data.status == 'active'
         || (signedIn() && (resource.data.merchantId == uid() || isAdmin()));
       allow write: if false; // /api/merchant/products
+
+      // One review per verified buyer, written by /api/reviews. Hidden reviews are visible to their author and admins only.
+      match /reviews/{reviewId} {
+        allow read: if resource.data.get('hidden', false) != true || isAdmin() || (signedIn() && uid() == reviewId);
+        allow write: if false;
+      }
     }
 
     match /orders/{id} {
@@ -63,9 +84,9 @@ service cloud.firestore {
     }
 
     match /merchantOrders/{id} {
-      // merchant sees their rows, the customer sees their own (tracking), admin sees all
-      allow read: if signedIn()
-        && (resource.data.merchantId == uid() || resource.data.customerId == uid() || isAdmin());
+      // The ledger holds commission and payout figures: stores see their own rows, admins see all.
+      // Customers read delivery status through /api/orders/[id], which leaves the financials out.
+      allow read: if signedIn() && (resource.data.merchantId == uid() || isAdmin());
       allow write: if false; // /api/merchant/orders/[id]/fulfillment
     }
 
@@ -78,6 +99,17 @@ service cloud.firestore {
     match /ledgerAdjustments/{id} {
       allow read: if signedIn() && (resource.data.merchantId == uid() || isAdmin());
       allow write: if false; // written by refunds, applied by /api/admin/payouts
+    }
+
+    // Legal & policy pages: public, written by /api/admin/pages/[slug]
+    match /pages/{slug} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Per-user request counters (rate limiting), server only
+    match /rateLimits/{id} {
+      allow read, write: if false;
     }
 
     match /settings/{id} {

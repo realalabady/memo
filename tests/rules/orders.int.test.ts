@@ -34,6 +34,7 @@ vi.mock("@/lib/payments/tabby", async (importOriginal) => {
 const { adminDb } = await import("@/lib/firebase/admin");
 const { createPendingOrder, markOrderFailed, markOrderPaid, settleTabby } = await import("@/lib/server/orders");
 const { refundOrder } = await import("@/lib/server/refunds");
+const { setReviewHidden, upsertReview } = await import("@/lib/server/reviews");
 
 const customer = { firstName: "Sara", lastName: "A", email: "s@a.sa", phone: "0551234567", city: "Riyadh", line1: "King Fahd Rd" };
 const stockOf = async (id: string) => (await adminDb().collection("products").doc(id).get()).data()!.stock as number;
@@ -44,6 +45,7 @@ beforeEach(async () => {
   const db = adminDb();
   const existing = await db.collection("orders").get();
   await Promise.all(existing.docs.map((d) => d.ref.delete()));
+  await db.recursiveDelete(db.collection("products").doc("p1")); // also clears its reviews
   await db.collection("merchants").doc("m1").set({ storeName: "Store", slug: "store", status: "approved" });
   await db.collection("merchants").doc("m2").set({ storeName: "Paused", slug: "paused", status: "suspended" });
   await db.collection("products").doc("p1").set({ merchantId: "m1", title: "Lamp", price: 250, stock: 2, status: "active", images: [] });
@@ -173,5 +175,40 @@ describe("refunds", () => {
     tabby.refundFails = false;
     await refundOrder({ orderId: o.id, reason: "Returned", actorUid: "admin" });
     expect((await orderOf(o.id)).paymentStatus).toBe("refunded");
+  });
+});
+describe("reviews", () => {
+  const ratingOf = async () => {
+    const p = (await adminDb().collection("products").doc("p1").get()).data()!;
+    return { avg: p.ratingAvg, count: p.ratingCount };
+  };
+  const buy = async (customerId: string) => {
+    const o = await createPendingOrder({ customerId, customer, items: [{ productId: "p1", quantity: 1 }], provider: "tabby", splitAs: "tabby" });
+    await markOrderPaid(o.id, "sim_1");
+  };
+  const review = (uid: string, rating: number) => upsertReview({ uid, displayName: uid, productId: "p1", rating, text: "ok" });
+
+  it("only verified buyers can review", async () => {
+    await expect(review("stranger", 5)).rejects.toThrow(/bought this product/);
+    const o = await order(1); // unpaid order doesn't count either
+    await expect(review("alice", 5)).rejects.toThrow(/bought this product/);
+    await markOrderPaid(o.id, "sim_1");
+    await review("alice", 5);
+    expect(await ratingOf()).toEqual({ avg: 5, count: 1 });
+  });
+
+  it("keeps one review per buyer and the average in step with edits and moderation", async () => {
+    await buy("alice");
+    await buy("bob");
+    await review("alice", 5);
+    await review("bob", 2);
+    expect(await ratingOf()).toEqual({ avg: 3.5, count: 2 });
+    await review("bob", 4); // edit, not a second review
+    expect(await ratingOf()).toEqual({ avg: 4.5, count: 2 });
+    await setReviewHidden("p1", "bob", true);
+    await setReviewHidden("p1", "bob", true); // idempotent
+    expect(await ratingOf()).toEqual({ avg: 5, count: 1 });
+    await setReviewHidden("p1", "bob", false);
+    expect(await ratingOf()).toEqual({ avg: 4.5, count: 2 });
   });
 });

@@ -2,7 +2,8 @@ import "server-only";
 import { cacheLife, cacheTag } from "next/cache";
 import { adminDb, isAdminConfigured } from "@/lib/firebase/admin";
 import { demoCategories, demoMerchants, demoProducts } from "@/lib/fixtures";
-import type { Category, Merchant, Product } from "@/lib/types";
+import { withLegalDefaults, type LegalPage, type LegalSlug } from "@/lib/legal";
+import { DEFAULT_STOREFRONT, withStorefrontDefaults, type Category, type Merchant, type Product, type Review, type StorefrontSettings } from "@/lib/types";
 
 /**
  * Public catalog reads for the storefront. Cached with `use cache` and
@@ -58,6 +59,22 @@ export async function getProduct(id: string): Promise<Product | null> {
   return (await approvedMerchantIds()).has(product.merchantId) ? product : null;
 }
 
+/** Visible reviews of a product, newest first. Hidden ones never reach the page. */
+export async function getReviews(productId: string): Promise<Review[]> {
+  "use cache";
+  cacheLife("minutes");
+  cacheTag("catalog");
+  if (!isAdminConfigured) return [];
+  const snap = await adminDb()
+    .collection("products")
+    .doc(productId)
+    .collection("reviews")
+    .orderBy("createdAt", "desc")
+    .limit(40)
+    .get();
+  return snap.docs.map((d) => d.data() as Review).filter((r) => !r.hidden);
+}
+
 async function approvedMerchantIds() {
   return new Set((await getMerchants()).map((m) => m.id));
 }
@@ -88,4 +105,24 @@ export function staticParamsOrPlaceholder<K extends string>(key: K, values: stri
 export async function getCategoryBySlug(slug: string): Promise<Category | null> {
   const all = await getCategories();
   return all.find((c) => c.slug === slug) ?? null;
+}
+
+/** Home page layout and copy (settings/storefront), edited at /admin/storefront. */
+export async function getStorefront(): Promise<StorefrontSettings> {
+  "use cache";
+  cacheLife("minutes");
+  cacheTag("catalog");
+  if (!isAdminConfigured) return DEFAULT_STOREFRONT;
+  const snap = await adminDb().collection("settings").doc("storefront").get();
+  return withStorefrontDefaults(snap.data() as Partial<StorefrontSettings> | undefined);
+}
+
+/** A legal/policy page (pages/{slug}), falling back to the built-in text. */
+export async function getLegalPage(slug: LegalSlug): Promise<LegalPage> {
+  "use cache";
+  cacheLife("minutes");
+  cacheTag("catalog");
+  if (!isAdminConfigured) return withLegalDefaults(slug);
+  const snap = await adminDb().collection("pages").doc(slug).get();
+  return withLegalDefaults(slug, snap.data() as Partial<LegalPage> | undefined);
 }

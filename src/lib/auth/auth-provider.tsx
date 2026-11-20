@@ -5,6 +5,7 @@ import {
   createUserWithEmailAndPassword,
   onAuthStateChanged,
   sendEmailVerification,
+  sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signInWithPopup,
   signOut as fbSignOut,
@@ -28,6 +29,12 @@ interface AuthState {
   signUp: (name: string, email: string, password: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
+  /** false only for a signed-in account whose email isn't confirmed yet (checkout requires it) */
+  emailVerified: boolean;
+  resendVerification: () => Promise<void>;
+  /** Re-reads the account after the shopper clicked the email link. Resolves to the new state. */
+  refreshVerification: () => Promise<boolean>;
+  resetPassword: (email: string) => Promise<void>;
   /** Demo mode only: enter as any role */
   enterDemo: (role: Role) => void;
 }
@@ -65,6 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [merchant, setMerchant] = useState<Merchant | null>(null);
   const [loading, setLoading] = useState(true);
   const [demoRole, setDemoRole] = useState<Role | null>(null);
+  const [verified, setVerified] = useState(true);
 
   // Demo mode: role lives in localStorage
   useEffect(() => {
@@ -82,6 +90,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!isFirebaseConfigured) return;
     return onAuthStateChanged(auth(), async (u) => {
       setFbUser(u);
+      setVerified(u?.emailVerified ?? true);
       if (!u) {
         setProfile(null);
         setMerchant(null);
@@ -159,6 +168,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           } catch {}
           setDemoRole(null);
         },
+        emailVerified: true,
+        resendVerification: async () => {},
+        refreshVerification: async () => true,
+        resetPassword: async () => {},
         enterDemo,
       };
     }
@@ -187,9 +200,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await fetch("/api/auth/session", { method: "DELETE" }).catch(() => {});
         await fbSignOut(auth());
       },
+      emailVerified: verified,
+      resendVerification: async () => {
+        if (fbUser) await sendEmailVerification(fbUser);
+      },
+      refreshVerification: async () => {
+        if (!fbUser) return false;
+        await fbUser.reload();
+        if (fbUser.emailVerified) {
+          await fbUser.getIdToken(true); // the token carries email_verified for the server
+          await bootstrap(fbUser).catch(() => {}); // verified ADMIN_EMAILS get promoted here
+        }
+        setVerified(fbUser.emailVerified);
+        return fbUser.emailVerified;
+      },
+      // Always resolves: never reveal whether an email has an account.
+      resetPassword: async (email) => {
+        await sendPasswordResetEmail(auth(), email).catch(() => {});
+      },
       enterDemo,
     };
-  }, [demoRole, fbUser, profile, merchant, loading, enterDemo]);
+  }, [demoRole, fbUser, profile, merchant, loading, enterDemo, verified]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

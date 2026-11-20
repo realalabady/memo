@@ -4,18 +4,21 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { toast } from "sonner";
-import { ImageSquare, X } from "@phosphor-icons/react";
+import { CaretLeft, CaretRight, ImageSquare, X } from "@phosphor-icons/react";
 import { Panel } from "@/components/dashboard/widgets";
 import { Button, Field, SelectField, TextArea } from "@/components/ui/primitives";
 import { localized } from "@/i18n/config";
 import { useLocale, useT } from "@/i18n/client";
 import { useAuth } from "@/lib/auth/auth-provider";
+import { useMerchantScope } from "@/lib/auth/merchant-scope";
 import { useCategories } from "@/lib/data/hooks";
 import { saveProduct, uploadImage } from "@/lib/data/mutations";
 import type { Product } from "@/lib/types";
 
 export function ProductForm({ product }: { product?: Product }) {
   const t = useT().merchant.form;
+  const mt = useT().merchant;
+  const { readOnly } = useMerchantScope();
   const lang = useLocale();
   const { user, merchant } = useAuth();
   const router = useRouter();
@@ -38,9 +41,20 @@ export function ProductForm({ product }: { product?: Product }) {
     }
   }
 
+  /** Swap a photo with its neighbour; the first photo is the cover. */
+  function move(index: number, by: -1 | 1) {
+    setImages((cur) => {
+      const next = [...cur];
+      const target = index + by;
+      if (target < 0 || target >= next.length) return cur;
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  }
+
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!user || !merchant) return;
+    if (!user || !merchant || readOnly) return;
     if (!images.length) return toast.error(t.needPhoto);
     const f = new FormData(e.currentTarget);
     const compare = Number(f.get("compareAtPrice"));
@@ -67,7 +81,8 @@ export function ProductForm({ product }: { product?: Product }) {
   }
 
   return (
-    <form onSubmit={submit} className="grid gap-4 xl:grid-cols-3">
+    <form onSubmit={submit}>
+      <fieldset disabled={readOnly} className="grid min-w-0 gap-4 xl:grid-cols-3">
       <Panel className="xl:col-span-2" title={t.details}>
         <div className="grid gap-4 p-5 sm:grid-cols-2">
           <Field label={t.title} name="title" dir="ltr" required maxLength={140} defaultValue={product?.title} />
@@ -98,6 +113,14 @@ export function ProductForm({ product }: { product?: Product }) {
                 <button type="button" aria-label={t.removeImage} onClick={() => setImages((cur) => cur.filter((x) => x !== src))} className="absolute end-1.5 top-1.5 flex size-6 items-center justify-center rounded-full bg-paper/90 opacity-0 transition group-hover:opacity-100 focus:opacity-100">
                   <X className="size-3" />
                 </button>
+                <span className="absolute inset-x-1.5 bottom-1.5 flex justify-between opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100">
+                  <button type="button" aria-label={mt.moveEarlier} disabled={i === 0} onClick={() => move(i, -1)} className="flex size-6 items-center justify-center rounded-full bg-paper/90 disabled:opacity-30">
+                    <CaretLeft className="size-3 rtl:-scale-x-100" />
+                  </button>
+                  <button type="button" aria-label={mt.moveLater} disabled={i === images.length - 1} onClick={() => move(i, 1)} className="flex size-6 items-center justify-center rounded-full bg-paper/90 disabled:opacity-30">
+                    <CaretRight className="size-3 rtl:-scale-x-100" />
+                  </button>
+                </span>
               </div>
             ))}
             {images.length < 8 && (
@@ -114,6 +137,7 @@ export function ProductForm({ product }: { product?: Product }) {
           </Button>
         </div>
       </Panel>
+      </fieldset>
     </form>
   );
 }

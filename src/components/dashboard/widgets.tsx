@@ -1,7 +1,7 @@
 "use client";
 
 import { animate, motion, useInView, useMotionValue, useTransform } from "motion/react";
-import { useEffect, useMemo, useRef, type ReactNode } from "react";
+import { Children, cloneElement, Fragment, isValidElement, useEffect, useMemo, useRef, type ReactElement, type ReactNode } from "react";
 import { expo } from "@/components/ui/motion";
 import type { MerchantOrder } from "@/lib/types";
 import { useFormat, useT } from "@/i18n/client";
@@ -150,22 +150,44 @@ export function Panel({ title, actions, children, className }: { title?: ReactNo
   );
 }
 
-/** Horizontally-scrollable table wrapper with consistent styling */
+/**
+ * Label each cell with its column name so phones can show rows as stacked cards
+ * (CSS in globals.css, .rtable). Walks fragments; full-width rows (colSpan) stay unlabeled.
+ */
+function labelCells(node: ReactNode, head: string[]): ReactNode {
+  return Children.map(node, (child) => {
+    if (!isValidElement(child)) return child;
+    const el = child as ReactElement<{ children?: ReactNode; colSpan?: number }>;
+    if (el.type === Fragment) return cloneElement(el, {}, labelCells(el.props.children, head));
+    if (el.type !== "tr") return el;
+    let i = 0;
+    const cells = Children.map(el.props.children, (cell) => {
+      if (!isValidElement(cell)) return cell;
+      const td = cell as ReactElement<{ colSpan?: number; "data-label"?: string }>;
+      const label = td.props.colSpan ? undefined : head[i];
+      i += td.props.colSpan ?? 1;
+      return label === undefined ? cloneElement(td, { "data-full": "" } as never) : cloneElement(td, { "data-label": label });
+    });
+    return cloneElement(el, {}, cells);
+  });
+}
+
+/** Table on tablet/desktop; stacked cards (one per row) on phones. */
 export function Table({ head, children, empty }: { head: string[]; children: ReactNode; empty?: boolean }) {
   const t = useT();
   return (
-    <div className="overflow-x-auto px-2 pb-2">
-      <table className="w-full min-w-[720px] text-start text-[13px]">
+    <div className="px-2 pb-2 md:overflow-x-auto">
+      <table className="rtable w-full text-start text-[13px] md:min-w-[720px]">
         <thead>
           <tr className="text-[10px] uppercase tracking-[0.14em] text-muted">
-            {head.map((h) => (
-              <th key={h} className="px-3 py-3 text-start font-medium">
+            {head.map((h, i) => (
+              <th key={`${h}-${i}`} className="px-3 py-3 text-start font-medium">
                 {h}
               </th>
             ))}
           </tr>
         </thead>
-        <tbody className="[&>tr]:border-t [&>tr]:border-ink/[0.05] [&>tr:hover]:bg-cream/50 [&_td]:px-3 [&_td]:py-3">{children}</tbody>
+        <tbody className="[&>tr]:border-t [&>tr]:border-ink/[0.05] [&>tr:hover]:bg-cream/50 [&_td]:px-3 [&_td]:py-3">{labelCells(children, head)}</tbody>
       </table>
       {empty && <p className="py-12 text-center text-sm text-muted">{t.dash.tableEmpty}</p>}
     </div>

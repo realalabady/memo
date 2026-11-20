@@ -6,6 +6,7 @@ import { shouldSimulate } from "@/lib/payments";
 import { createTabbySession } from "@/lib/payments/tabby";
 import { createTamaraCheckout } from "@/lib/payments/tamara";
 import { appUrl, errorResponse, HttpError, requireUser } from "@/lib/server/auth";
+import { rateLimit } from "@/lib/server/rate-limit";
 import { createPendingOrder, markOrderFailed, saveProviderRefs } from "@/lib/server/orders";
 import { round2 } from "@/lib/utils";
 
@@ -45,6 +46,9 @@ export async function POST(req: Request) {
     }
 
     const user = await requireUser(req);
+    await rateLimit("checkout", user.uid, 6);
+    // An unverified address could be someone else's: order emails and BNPL contact details must be real.
+    if (!user.decoded.email_verified) throw new HttpError(403, "Verify your email address before checking out");
     const order = await createPendingOrder({
       customerId: user.uid,
       customer,

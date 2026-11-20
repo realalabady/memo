@@ -9,7 +9,7 @@ export type PaymentStatus =
   | "refunded";
 export type FulfillmentStatus = "pending" | "shipped" | "delivered";
 export type PayoutStatus = "unpaid" | "paid" | "on_hold";
-export type MerchantStatus = "pending" | "approved" | "suspended";
+export type MerchantStatus = "pending" | "approved" | "suspended" | "rejected";
 
 export interface UserProfile {
   uid: string;
@@ -17,6 +17,8 @@ export interface UserProfile {
   displayName: string;
   role: Role;
   phone?: string;
+  /** Account disabled by an admin (mirrors Firebase Auth) */
+  disabled?: boolean;
   createdAt: number;
 }
 
@@ -36,8 +38,24 @@ export interface Merchant {
   status: MerchantStatus;
   /** Optional override of the platform commission (0.1 = 10%) */
   commissionRate?: number;
+  /** Shown to the owner when status is "rejected" */
+  rejectionReason?: string;
+  termsAcceptedAt?: number;
+  termsVersion?: string;
   createdAt: number;
 }
+
+/** merchants/{id}/private/contact — owner + admin only (contact and KYC details) */
+export interface MerchantContact {
+  email: string;
+  phone: string;
+  /** Commercial registration number */
+  crNumber: string;
+  vatNumber?: string;
+  updatedAt: number;
+}
+
+export const MERCHANT_TERMS_VERSION = "2026-11";
 
 /** merchants/{id}/private/bank — only owner + admin can read */
 export interface MerchantBank {
@@ -74,8 +92,36 @@ export interface Product {
   stock: number;
   /** "archived" = deleted by the merchant; kept so past orders still resolve */
   status: "active" | "draft" | "archived";
+  /** Average of visible reviews (1–5) and how many there are; maintained by /api/reviews */
+  ratingAvg?: number;
+  ratingCount?: number;
+  ratingSum?: number;
+  /** Unpublished by an admin; kept as "draft" until an admin releases it */
+  hiddenByAdmin?: boolean;
+  hiddenReason?: string;
+  /** Status to restore when an admin releases the product */
+  statusBeforeHide?: "active" | "draft";
   createdAt: number;
   updatedAt?: number;
+}
+
+/** products/{productId}/reviews/{uid} — one review per verified buyer */
+export interface Review {
+  uid: string;
+  displayName: string;
+  rating: number;
+  text: string;
+  hidden?: boolean;
+  reply?: { text: string; at: number };
+  createdAt: number;
+  updatedAt?: number;
+}
+
+/** users/{uid}/addresses/{id} */
+export interface SavedAddress extends Address {
+  id: string;
+  label?: string;
+  createdAt: number;
 }
 
 export interface OrderLine {
@@ -228,3 +274,68 @@ export const DEFAULT_SETTINGS: PlatformSettings = {
   vatNumber: "",
   payoutHoldDays: 3,
 };
+
+/** Home page building blocks, in the order the admin arranges them. */
+export const HOME_SECTIONS = ["categories", "banner", "featured", "how", "stores", "sell"] as const;
+export type HomeSection = (typeof HOME_SECTIONS)[number];
+
+/** settings/storefront — the home page, edited at /admin/storefront. Empty text falls back to the built-in copy. */
+export interface StorefrontSettings {
+  hero: { l1: string; l1Ar: string; l2: string; l2Ar: string; l3: string; l3Ar: string; body: string; bodyAr: string };
+  /** Up to 3 products floating in the hero; empty = one per category */
+  heroProductIds: string[];
+  /** Categories shown in the home grid, in this order; empty = all */
+  featuredCategoryIds: string[];
+  /** Products in the "just landed" grid, in this order; empty = newest */
+  featuredProductIds: string[];
+  banner: { enabled: boolean; image: string; link: string; title: string; titleAr: string; subtitle: string; subtitleAr: string };
+  sections: { id: HomeSection; visible: boolean }[];
+  updatedAt: number;
+}
+
+export const DEFAULT_STOREFRONT: StorefrontSettings = {
+  hero: { l1: "", l1Ar: "", l2: "", l2Ar: "", l3: "", l3Ar: "", body: "", bodyAr: "" },
+  heroProductIds: [],
+  featuredCategoryIds: [],
+  featuredProductIds: [],
+  banner: { enabled: false, image: "", link: "", title: "", titleAr: "", subtitle: "", subtitleAr: "" },
+  sections: HOME_SECTIONS.map((id) => ({ id, visible: id !== "banner" })),
+  updatedAt: 0,
+};
+
+/** Fills gaps in a stored storefront doc (new sections, missing fields). */
+export function withStorefrontDefaults(raw: Partial<StorefrontSettings> | undefined): StorefrontSettings {
+  const d = DEFAULT_STOREFRONT;
+  const known = (raw?.sections ?? []).filter((s) => (HOME_SECTIONS as readonly string[]).includes(s.id));
+  const sections = [...known, ...d.sections.filter((s) => !known.some((k) => k.id === s.id))];
+  return {
+    ...d,
+    ...raw,
+    hero: { ...d.hero, ...raw?.hero },
+    banner: { ...d.banner, ...raw?.banner },
+    sections,
+  };
+}
+
+export interface AuditLog {
+  id: string;
+  actorUid: string;
+  action: string;
+  target: string;
+  data?: Record<string, unknown>;
+  createdAt: number;
+}
+
+/** GET /api/admin/stats — totals over the whole ledger */
+export interface AdminStats {
+  paidCount: number;
+  collected: number;
+  commission: number;
+  providerFees: number;
+  tabby: number;
+  tamara: number;
+  owed: number;
+  balances: { id: string; name: string; amount: number; count: number }[];
+  transferred: number;
+  payoutCount: number;
+}

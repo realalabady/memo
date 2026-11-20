@@ -22,11 +22,16 @@ Admin › Payouts: send the bank transfer, enter the reference → payouts/{id},
 
 ## Routes
 
+All pages work at `/ar/...` and `/en/...` (Arabic is the default; unprefixed links keep the shopper's language).
+
 | Area | Path |
 | --- | --- |
-| Storefront | `/`, `/shop`, `/category/[slug]`, `/product/[id]`, `/store/[slug]`, `/checkout`, `/account`, `/sell` |
-| Merchant | `/merchant`: overview, products (with image upload), orders/fulfilment, payouts, store and bank settings |
-| Admin | `/admin`: ledger overview, transactions, payouts, merchant approval and commission, categories, fee settings |
+| Storefront | `/`, `/shop` (search, filters), `/category/[slug]`, `/product/[id]`, `/store/[slug]`, `/checkout`, `/sell` |
+| Account | `/account` (profile, addresses), `/account/orders/[id]` (+ `/invoice`), `/account/wishlist` |
+| Policies | `/legal/terms`, `/legal/privacy`, `/legal/returns`, `/legal/shipping`, `/legal/merchant-terms` |
+| Merchant | `/merchant`: overview, products, orders and fulfilment, payouts, reviews, store and bank settings |
+| Admin | `/admin`: overview, transactions (CSV), payouts, stores, product moderation, storefront editor, categories, legal pages, users, audit log, settings |
+| SEO | `/sitemap.xml`, `/robots.txt` |
 
 ## Run it
 
@@ -37,21 +42,40 @@ npm run dev
 
 With no `.env.local`, the app runs in **demo mode**: the storefront uses sample data, and `/login` lets you enter as Admin, Merchant or Customer.
 
-## Go live
+Checks: `npm run typecheck`, `npm run lint`, `npm test`, `npm run test:rules` (Firestore + Storage emulators, needs Java), `npm run build`.
 
-1. Create a Firebase project. Enable **Email/Password** and **Google** auth, **Firestore** and **Storage**.
-2. `cp .env.example .env.local`, then fill in the web keys and a service-account key. Put your email in `ADMIN_EMAILS`.
-3. Deploy the rules: `npx firebase-tools deploy --only firestore:rules,firestore:indexes,storage`
-4. Seed the sample catalog (optional): `npm run seed`
-5. Sign in with your admin email. You get the admin role once the email is verified; Google sign-in counts as verified.
-6. Payments:
-   * **Tabby**: set `TABBY_SECRET_KEY` and `TABBY_MERCHANT_CODE`. Register a webhook to `{APP_URL}/api/webhooks/tabby` with the header `X-Webhook-Secret: <TABBY_WEBHOOK_SECRET>`.
-   * **Tamara**: set `TAMARA_API_TOKEN`, `TAMARA_API_URL` (sandbox or `https://api.tamara.co`) and `TAMARA_NOTIFICATION_TOKEN`. The notification URL is sent with every checkout.
-   * Until a provider's keys are set, checkout uses a built-in **payment simulator** (development only), so you can test orders, the ledger and payouts end to end.
-7. Set your real contract rates in **Admin › Settings**: commission, Tabby fee, Tamara fee, and whether the fee is deducted from the merchant.
+## Go live: production checklist
 
-> Check field names against the latest Tabby and Tamara API docs before going live. Both providers occasionally rename payload fields, and the integration lives in `src/lib/payments/`.
+**Firebase**
+- [ ] Create a Firebase project. Enable **Email/Password** and **Google** sign-in, **Firestore** and **Storage**.
+- [ ] Fill `.env.local` (or your host's env settings) from `.env.example`: the six `NEXT_PUBLIC_FIREBASE_*` web keys and the `FIREBASE_*` service-account key.
+- [ ] Deploy rules and indexes: `npx firebase-tools deploy --only firestore:rules,firestore:indexes,storage`. Redeploy whenever `firestore.rules`, `storage.rules` or `firestore.indexes.json` change.
+- The TTL policy that deletes old rate-limit counters (`rateLimits.expireAt`) is part of `firestore.indexes.json`, so the deploy above sets it up.
+- [ ] Seed categories and settings: `npm run seed` (add `-- --samples` only on a staging project).
+
+**Accounts**
+- [ ] `ADMIN_EMAILS`: your admin email(s). Sign in once; the admin role is granted when the email is verified (Google counts as verified). More admins can be added later in **Admin › Users**.
+
+**Site**
+- [ ] `NEXT_PUBLIC_APP_URL` = your public https address (used for payment redirects, webhooks, canonical links and the sitemap). The server refuses to start in production without it.
+- [ ] `PAYMENTS_DEMO` is **unset** (the server refuses to start in production if it is set).
+- [ ] `CRON_SECRET` set. On Vercel, `vercel.json` runs `/api/cron/expire-orders` every 15 minutes; elsewhere call it with `Authorization: Bearer $CRON_SECRET`.
+
+**Tabby**
+- [ ] `TABBY_SECRET_KEY`, `TABBY_MERCHANT_CODE`, `TABBY_API_URL`.
+- [ ] `TABBY_WEBHOOK_SECRET`, then register the webhook: `npx tsx --env-file=.env.local scripts/register-tabby-webhook.ts` (points to `{APP_URL}/api/webhooks/tabby`).
+
+**Tamara**
+- [ ] `TAMARA_API_TOKEN`, `TAMARA_API_URL` (`https://api.tamara.co` in production), `TAMARA_NOTIFICATION_TOKEN`. The notification URL is sent with every checkout.
+
+**In the admin dashboard**
+- [ ] **Settings**: commission, your Tabby and Tamara fee rates, VAT number and legal name for invoices, payout hold days.
+- [ ] **Legal pages**: replace the built-in texts (terms, privacy, returns, delivery, merchant terms) with lawyer-reviewed wording.
+- [ ] **Storefront**: home page headline, featured products and categories, promo banner.
+- [ ] Place one real order with each provider, then refund it, to confirm webhooks and refunds work against your accounts.
+
+> Check field names against the latest Tabby and Tamara API docs before going live. The integration lives in `src/lib/payments/`.
 
 ## Not included yet
 
-Refunds and partial captures, shipping fees, and automatic bank transfers. Payouts are recorded by hand after you send the transfer.
+Shipping fees (delivery is free), transactional emails beyond Firebase's own verification and password-reset mails, automatic bank transfers (payouts are recorded by hand after you send the transfer), and full ZATCA phase-2 (Fatoora) e-invoicing.

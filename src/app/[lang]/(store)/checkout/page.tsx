@@ -13,9 +13,11 @@ import { localized } from "@/i18n/config";
 import { useFormat, useT } from "@/i18n/client";
 import { fmt } from "@/i18n/dictionaries";
 import { useAuth, useAuthedFetch } from "@/lib/auth/auth-provider";
+import { useAddresses } from "@/lib/data/hooks";
+import { saveAddress } from "@/lib/data/mutations";
 import { PROVIDER_LIMITS, providerAvailable } from "@/lib/money";
-import { cartTotal, useCart } from "@/lib/store/cart";
-import type { Provider } from "@/lib/types";
+import { buyable, cartTotal, useCart, useCartSync } from "@/lib/store/cart";
+import type { Provider, SavedAddress } from "@/lib/types";
 import { cn, installment } from "@/lib/utils";
 
 const providerName: Record<Provider, { en: string; ar: string }> = {
@@ -25,20 +27,30 @@ const providerName: Record<Provider, { en: string; ar: string }> = {
 
 export default function CheckoutPage() {
   const t = useT().checkout;
+  const legal = useT().legal;
+  const footerT = useT().footer;
   const common = useT().common;
   const { money, lang } = useFormat();
-  const lines = useCart((s) => s.lines);
-  const { user, profile, demo, loading } = useAuth();
+  const allLines = useCart((s) => s.lines);
+  const lines = buyable(allLines);
+  const account = useT().account;
+  const { user, profile, demo, loading, emailVerified, resendVerification, refreshVerification } = useAuth();
+  const { data: addresses } = useAddresses(demo ? null : (user?.uid ?? null));
+  const [preset, setPreset] = useState<SavedAddress | null>(null);
   const authedFetch = useAuthedFetch();
   const [provider, setProvider] = useState<Provider>("tabby");
   const [busy, setBusy] = useState(false);
   const [mounted, setMounted] = useState(false);
   // eslint-disable-next-line react-hooks/set-state-in-effect -- cart is hydrated from localStorage
   useEffect(() => setMounted(true), []);
+  // Stale bags (old prices, sold-out items) are corrected before the shopper pays.
+  const cartT = useT().cart;
+  useCartSync(mounted, () => toast(cartT.updated));
 
   const total = cartTotal(lines);
   const per = installment(total);
   const needsLogin = !demo && !loading && !user;
+  const needsVerify = !demo && Boolean(user) && !emailVerified;
   const name = providerName[provider][lang];
   const copy: Record<Provider, { title: string; body: string }> = {
     tabby: { title: t.tabbyTitle, body: t.tabbyBody },
@@ -64,7 +76,11 @@ export default function CheckoutPage() {
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error ?? t.failed);
-      window.location.href = body.url;
+      if (user && !demo && !preset && f.get("saveAddress") === "on") {
+        const { firstName, lastName, email, phone, city, line1, zip } = customer;
+        await saveAddress(user.uid, { firstName, lastName, email, phone, city, line1, zip }).catch(() => {});
+      }
+      window.location.assign(body.url);
     } catch (err) {
       toast.error((err as Error).message);
       setBusy(false);
@@ -103,18 +119,71 @@ export default function CheckoutPage() {
           </div>
         )}
 
+        {needsVerify && (
+          <div className="mt-8 flex flex-wrap items-center justify-between gap-4 rounded-3xl bg-ember-soft px-6 py-4 text-sm">
+            <span>
+              <span className="block font-medium">{account.verifyTitle}</span>
+              {fmt(account.verifyBody, { email: user?.email ?? "" })}
+            </span>
+            <span className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => resendVerification().then(() => toast(account.verifySent)).catch((err) => toast.error((err as Error).message))}
+                className="rounded-full px-4 py-2 ring-1 ring-ink/20"
+              >
+                {account.resend}
+              </button>
+              <button
+                type="button"
+                onClick={() => refreshVerification().then((ok) => !ok && toast.error(account.notVerifiedYet))}
+                className="rounded-full bg-ink px-4 py-2 text-paper"
+              >
+                {account.verified}
+              </button>
+            </span>
+          </div>
+        )}
+
         <form onSubmit={submit} className="mt-12 grid gap-8 lg:grid-cols-12">
           <div className="space-y-8 lg:col-span-7">
             <Bezel innerClassName="p-6 md:p-8">
               <p className="font-display text-3xl italic">{t.delivery}</p>
-              <div className="mt-6 grid gap-4 sm:grid-cols-2">
-                <Field label={t.firstName} name="firstName" required defaultValue={first} autoComplete="given-name" />
-                <Field label={t.lastName} name="lastName" required defaultValue={rest.join(" ")} autoComplete="family-name" />
+              {addresses.length > 0 && (
+                <div className="mt-5 flex flex-wrap gap-2" role="group" aria-label={t.savedAddresses}>
+                  {addresses.map((a) => (
+                    <button
+                      type="button"
+                      key={a.id}
+                      onClick={() => setPreset(a)}
+                      className={cn("rounded-full px-4 py-2 text-sm ring-1 transition", preset?.id === a.id ? "bg-ink text-paper ring-ink" : "ring-ink/10 hover:bg-cream")}
+                    >
+                      {a.label || `${a.line1}, ${a.city}`}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setPreset(null)}
+                    className={cn("rounded-full px-4 py-2 text-sm ring-1 transition", !preset ? "bg-ink text-paper ring-ink" : "ring-ink/10 hover:bg-cream")}
+                  >
+                    {t.newAddress}
+                  </button>
+                </div>
+              )}
+              {/* keyed so picking a saved address refills the (uncontrolled) fields */}
+              <div key={preset?.id ?? "new"} className="mt-6 grid gap-4 sm:grid-cols-2">
+                <Field label={t.firstName} name="firstName" required defaultValue={preset?.firstName ?? first} autoComplete="given-name" />
+                <Field label={t.lastName} name="lastName" required defaultValue={preset?.lastName ?? rest.join(" ")} autoComplete="family-name" />
                 <Field label={t.email} name="email" type="email" dir="ltr" required defaultValue={user?.email} autoComplete="email" />
-                <Field label={t.mobile} name="phone" type="tel" dir="ltr" required placeholder="+9665XXXXXXXX" autoComplete="tel" />
-                <Field label={t.city} name="city" required placeholder={t.cityPlaceholder} autoComplete="address-level2" />
-                <Field label={t.zip} name="zip" dir="ltr" autoComplete="postal-code" />
-                <Field className="sm:col-span-2" label={t.street} name="line1" required placeholder={t.streetPlaceholder} autoComplete="street-address" />
+                <Field label={t.mobile} name="phone" type="tel" dir="ltr" required defaultValue={preset?.phone ?? profile?.phone} placeholder="+9665XXXXXXXX" autoComplete="tel" />
+                <Field label={t.city} name="city" required defaultValue={preset?.city} placeholder={t.cityPlaceholder} autoComplete="address-level2" />
+                <Field label={t.zip} name="zip" dir="ltr" defaultValue={preset?.zip} autoComplete="postal-code" />
+                <Field className="sm:col-span-2" label={t.street} name="line1" required defaultValue={preset?.line1} placeholder={t.streetPlaceholder} autoComplete="street-address" />
+                {user && !demo && !preset && (
+                  <label className="flex items-center gap-3 text-sm text-ink/70 sm:col-span-2">
+                    <input type="checkbox" name="saveAddress" className="size-4 accent-[var(--color-ink)]" />
+                    {t.saveAddress}
+                  </label>
+                )}
               </div>
             </Bezel>
 
@@ -200,11 +269,16 @@ export default function CheckoutPage() {
                     </div>
                   ))}
                 </motion.div>
-                <Button type="submit" variant="ink" size="lg" disabled={busy || needsLogin || !providerAvailable(provider, total)} className="mt-6 w-full justify-between">
+                <Button type="submit" variant="ink" size="lg" disabled={busy || needsLogin || needsVerify || !providerAvailable(provider, total)} className="mt-6 w-full justify-between">
                   {busy ? t.connecting : fmt(t.continueWith, { provider: name })}
                 </Button>
                 <p className="mt-4 flex items-center justify-center gap-1.5 text-[11px] text-muted">
                   <Lock weight="light" className="size-3.5" /> {fmt(t.confirmOn, { provider: name })}
+                </p>
+                <p className="mt-2 text-center text-[11px] text-muted">
+                  {legal.agree}{" "}
+                  <Link href="/legal/terms" target="_blank" className="underline underline-offset-2 hover:text-ink">{footerT.terms}</Link> {legal.and}{" "}
+                  <Link href="/legal/returns" target="_blank" className="underline underline-offset-2 hover:text-ink">{footerT.returns}</Link>.
                 </p>
               </Bezel>
             </div>

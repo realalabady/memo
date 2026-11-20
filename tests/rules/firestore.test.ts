@@ -5,7 +5,7 @@ import {
   initializeTestEnvironment,
   type RulesTestEnvironment,
 } from "@firebase/rules-unit-testing";
-import { addDoc, collection, deleteDoc, doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
+import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, setDoc, updateDoc } from "firebase/firestore";
 import { afterAll, beforeAll, beforeEach, describe, it } from "vitest";
 
 /** Run with `npm run test:rules` (starts the Firestore emulator). */
@@ -88,9 +88,9 @@ describe("merchantOrders (review finding: fulfilling unpaid orders)", () => {
   it("cannot be updated from the client, even by the owning merchant", async () => {
     await assertFails(updateDoc(doc(as("m1"), "merchantOrders/o1_m1"), { fulfillmentStatus: "shipped" }));
   });
-  it("are readable by the merchant and the customer, not strangers", async () => {
+  it("are readable by the store only: customers never see commission or payout figures", async () => {
     await assertSucceeds(getDoc(doc(as("m1"), "merchantOrders/o1_m1")));
-    await assertSucceeds(getDoc(doc(as("alice"), "merchantOrders/o1_m1")));
+    await assertFails(getDoc(doc(as("alice"), "merchantOrders/o1_m1")));
     await assertFails(getDoc(doc(as("bob"), "merchantOrders/o1_m1")));
   });
 });
@@ -109,11 +109,29 @@ describe("settings, categories, audit", () => {
     await assertFails(setDoc(doc(as("admin"), "settings/platform"), { commissionRate: 0 }));
     await assertSucceeds(getDoc(doc(anon(), "settings/platform")));
   });
-  it("only admins write valid categories", async () => {
+  it("categories and the storefront are server-written, even for admins", async () => {
     const cat = { name: "Home", slug: "home", order: 1 };
     await assertFails(setDoc(doc(as("alice"), "categories/home"), cat));
-    await assertFails(setDoc(doc(as("admin"), "categories/home"), { ...cat, name: "" }));
-    await assertSucceeds(setDoc(doc(as("admin"), "categories/home"), cat));
+    await assertFails(setDoc(doc(as("admin"), "categories/home"), cat));
+    await assertFails(setDoc(doc(as("admin"), "settings/storefront"), { sections: [] }));
+    await assertSucceeds(getDoc(doc(anon(), "categories/home")));
+    await assertSucceeds(getDoc(doc(anon(), "settings/storefront")));
+  });
+  it("admins can list users and audit logs; customers cannot", async () => {
+    await assertSucceeds(getDocs(collection(as("admin"), "users")));
+    await assertSucceeds(getDocs(collection(as("admin"), "auditLogs")));
+    await assertFails(getDocs(collection(as("alice"), "users")));
+    await assertFails(getDocs(collection(as("alice"), "auditLogs")));
+  });
+  it("legal pages are public to read, server-written; rate limits are private", async () => {
+    await assertSucceeds(getDoc(doc(anon(), "pages/returns")));
+    await assertFails(setDoc(doc(as("admin"), "pages/returns"), { title: "x" }));
+    await assertFails(getDoc(doc(as("alice"), "rateLimits/checkout_alice")));
+    await assertFails(setDoc(doc(as("alice"), "rateLimits/checkout_alice"), { count: 0 }));
+  });
+  it("admins can list every product, including drafts", async () => {
+    await assertSucceeds(getDocs(collection(as("admin"), "products")));
+    await assertFails(getDocs(collection(anon(), "products")));
   });
   it("audit logs are admin-read, never client-written", async () => {
     await assertFails(addDoc(collection(as("admin"), "auditLogs"), { action: "x" }));
@@ -127,5 +145,38 @@ describe("ledgerAdjustments (refund clawbacks)", () => {
     await assertFails(getDoc(doc(as("alice"), "ledgerAdjustments/a1")));
     await assertFails(updateDoc(doc(as("m1"), "ledgerAdjustments/a1"), { status: "applied" }));
     await assertFails(deleteDoc(doc(as("m1"), "ledgerAdjustments/a1")));
+  });
+});
+describe("wishlist and addresses (owner only)", () => {
+  const address = { firstName: "A", lastName: "B", email: "a@b.sa", phone: "0551234567", city: "Riyadh", line1: "Street 1", createdAt: 1 };
+  it("shoppers manage their own wishlist; ids must match the product", async () => {
+    await assertSucceeds(setDoc(doc(as("alice"), "users/alice/wishlist/p1"), { productId: "p1", createdAt: 1 }));
+    await assertFails(setDoc(doc(as("alice"), "users/alice/wishlist/p1"), { productId: "other", createdAt: 1 }));
+    await assertFails(setDoc(doc(as("bob"), "users/alice/wishlist/p1"), { productId: "p1", createdAt: 1 }));
+    await assertFails(getDoc(doc(as("bob"), "users/alice/wishlist/p1")));
+    await assertSucceeds(deleteDoc(doc(as("alice"), "users/alice/wishlist/p1")));
+  });
+  it("shoppers manage their own addresses with known fields only", async () => {
+    await assertSucceeds(setDoc(doc(as("alice"), "users/alice/addresses/a1"), address));
+    await assertFails(setDoc(doc(as("alice"), "users/alice/addresses/a2"), { ...address, role: "admin" }));
+    await assertFails(setDoc(doc(as("bob"), "users/alice/addresses/a3"), address));
+    await assertFails(getDoc(doc(as("bob"), "users/alice/addresses/a1")));
+  });
+});
+
+describe("reviews", () => {
+  beforeEach(async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "products/p1/reviews/alice"), { uid: "alice", rating: 5, text: "Great", createdAt: 1 });
+      await setDoc(doc(ctx.firestore(), "products/p1/reviews/bob"), { uid: "bob", rating: 1, text: "spam", hidden: true, createdAt: 2 });
+    });
+  });
+  it("are public unless hidden, and never client-written", async () => {
+    await assertSucceeds(getDoc(doc(anon(), "products/p1/reviews/alice")));
+    await assertFails(getDoc(doc(anon(), "products/p1/reviews/bob")));
+    await assertSucceeds(getDoc(doc(as("bob"), "products/p1/reviews/bob")));
+    await assertSucceeds(getDoc(doc(as("admin"), "products/p1/reviews/bob")));
+    await assertFails(setDoc(doc(as("alice"), "products/p1/reviews/alice"), { uid: "alice", rating: 5, text: "x", createdAt: 1 }));
+    await assertFails(updateDoc(doc(as("m1"), "products/p1/reviews/alice"), { rating: 5 }));
   });
 });

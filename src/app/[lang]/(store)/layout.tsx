@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { CartDrawer } from "@/components/store/cart-drawer";
 import { StoreFooter } from "@/components/store/footer";
 import { StoreNav } from "@/components/store/nav";
+import { WishlistSync } from "@/lib/store/wishlist";
 
 export default function StoreLayout({ children }: LayoutProps<"/[lang]">) {
   return (
@@ -13,6 +14,7 @@ export default function StoreLayout({ children }: LayoutProps<"/[lang]">) {
       <main className="flex-1">{children}</main>
       <StoreFooter />
       <CartDrawer />
+      <WishlistSync />
     </>
   );
 }

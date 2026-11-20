@@ -13,7 +13,7 @@ Multi-store marketplace for Saudi Arabia: independent stores sell, shoppers pay 
 ## Commands
 - Dev: `npm run dev` (port 3000) · Build: `npm run build` · Lint: `npm run lint` · Types: `npm run typecheck`
 - Unit tests: `npm test` (Vitest, `src/**/*.test.ts`)
-- Rules tests: `npm run test:rules` (Firestore emulator via firebase-tools; needs Java)
+- Rules + integration tests: `npm run test:rules` (Firestore/Storage emulators via firebase-tools; needs Java). Route handlers are tested in `tests/rules/*.int.test.ts`
 - Seed sample data: `npm run seed`
 
 ## Where things live
@@ -34,7 +34,17 @@ Multi-store marketplace for Saudi Arabia: independent stores sell, shoppers pay 
 - Refunds go through `refundOrder` (`src/lib/server/refunds.ts`): claim → provider → record. `refunded` is a final state. A refund on an already-paid-out row creates a `ledgerAdjustments` clawback netted into the next payout.
 - A ledger row is payable only when `payoutEligibility` says so (paid, delivered, past `settings.payoutHoldDays`, not on hold).
 - Webhooks are de-duplicated and logged via `handleOnce` (`paymentEvents`); the body is a hint, always re-read the payment from the provider.
+- Shop search/filter/sort/paging is in-memory over the cached catalog (`src/lib/search.ts`); state lives in the URL.
+- Reviews are written only by `src/lib/server/reviews.ts` (verified buyers; product keeps `ratingSum/Count/Avg`). Customers never read `merchantOrders` — use `/api/orders/[id]`.
+- Store contact + KYC live in `merchants/{id}/private/contact`; never put email/phone on the public store doc.
+- Merchant dashboard pages take the store from `useMerchantScope()` (admins view any store read-only), not `useAuth().user`.
+- Checkout and store applications require a verified email.
 - After catalog writes, revalidate the `catalog` cache tag.
+- Home page layout/copy lives in `settings/storefront` (`getStorefront`, edited at /admin/storefront); legal/policy pages in `pages/{slug}` (`src/lib/legal.ts` slugs + built-in text, rendered by `RichText`, never as raw HTML).
+- Categories, storefront, legal pages, product moderation and user roles are admin API routes (`/api/admin/*`) that write an `auditLogs` entry; clients never write them.
+- A product hidden by an admin (`hiddenByAdmin`) stays `draft` until an admin releases it; merchant edits keep it a draft.
+- Abuse-prone endpoints call `rateLimit(bucket, uid, n)` (`src/lib/server/rate-limit.ts`).
+- Public pages set `alternates(lang, path)` from `src/lib/seo.ts` in `generateMetadata`; add new public routes to `src/app/sitemap.ts`.
 - Demo mode = no Firebase keys (development only). `PAYMENTS_DEMO` is ignored in production and `src/instrumentation.ts` refuses to boot with it.
 - Any change to `firestore.rules`/`storage.rules` needs a matching test in `tests/rules/`.
 

@@ -1,4 +1,6 @@
+import type { Metadata } from "next";
 import Image from "next/image";
+import { alternates, clip } from "@/lib/seo";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { GridSkeleton } from "@/components/store/listing";
@@ -14,6 +16,18 @@ export async function generateStaticParams() {
   return staticParamsOrPlaceholder("slug", merchants.map((m) => m.slug));
 }
 
+export async function generateMetadata({ params }: PageProps<"/[lang]/store/[slug]">): Promise<Metadata> {
+  const { slug } = await params;
+  const [merchant, lang] = await Promise.all([getMerchantBySlug(decodeURIComponent(slug)), getLocale()]);
+  if (!merchant) return {};
+  return {
+    title: merchant.storeName,
+    description: clip(localized(merchant, "bio", lang) || localized(merchant, "tagline", lang)) || undefined,
+    alternates: alternates(lang, `/store/${merchant.slug}`),
+    openGraph: { images: [merchant.bannerUrl, merchant.logoUrl].filter((u): u is string => Boolean(u)).map((url) => ({ url })) },
+  };
+}
+
 async function StoreContent({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const [merchant, dict, lang] = await Promise.all([getMerchantBySlug(decodeURIComponent(slug)), getDictionary(), getLocale()]);
@@ -22,6 +36,11 @@ async function StoreContent({ params }: { params: Promise<{ slug: string }> }) {
   const tagline = localized(merchant, "tagline", lang);
   return (
     <>
+      {merchant.bannerUrl && (
+        <div className="relative mb-10 aspect-[4/1] overflow-hidden rounded-[2rem] bg-sand ring-1 ring-ink/[0.06]">
+          <Image src={merchant.bannerUrl} alt="" fill priority sizes="(min-width: 1280px) 1280px, 100vw" className="object-cover" />
+        </div>
+      )}
       <Reveal className="mb-16 grid gap-8 md:grid-cols-12 md:items-end">
         <div className="md:col-span-8">
           <div className="flex items-center gap-4">

@@ -17,6 +17,7 @@ const tones: Record<string, string> = {
   cancelled: "bg-ink/5 text-muted line-through",
   refunded: "bg-ink/5 text-muted",
   suspended: "bg-ink text-paper",
+  rejected: "bg-ember-soft text-[#8f321a]",
   on_hold: "bg-ink text-paper",
 };
 

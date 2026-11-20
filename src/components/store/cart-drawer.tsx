@@ -5,12 +5,14 @@ import Link from "next/link";
 import { AnimatePresence, motion } from "motion/react";
 import { Minus, Plus, X } from "@phosphor-icons/react";
 import { useEffect } from "react";
+import { toast } from "sonner";
 import { ButtonLink } from "@/components/ui/primitives";
 import { expo, fluid } from "@/components/ui/motion";
 import { localized } from "@/i18n/config";
 import { useFormat, useT } from "@/i18n/client";
-import { cartTotal, useCart } from "@/lib/store/cart";
-import { installment } from "@/lib/utils";
+import { fmt } from "@/i18n/dictionaries";
+import { cartTotal, useCart, useCartSync } from "@/lib/store/cart";
+import { cn, installment } from "@/lib/utils";
 
 export function CartDrawer() {
   const t = useT().cart;
@@ -18,6 +20,8 @@ export function CartDrawer() {
   const { money, lang } = useFormat();
   const { lines, open, setOpen, setQty, remove } = useCart();
   const total = cartTotal(lines);
+  // Prices and stock in localStorage can be stale: re-check them every time the bag opens.
+  useCartSync(open, () => toast(t.updated));
   // The drawer slides in from the inline-end edge: right in English, left in Arabic.
   const offscreen = lang === "ar" ? "-105%" : "105%";
 
@@ -70,7 +74,7 @@ export function CartDrawer() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0, transition: { delay: i * 0.04, ease: expo, duration: 0.6 } }}
                     exit={{ opacity: 0, x: lang === "ar" ? -40 : 40 }}
-                    className="flex gap-4 rounded-3xl bg-cream/60 p-2"
+                    className={cn("flex gap-4 rounded-3xl bg-cream/60 p-2", l.unavailable && "opacity-60")}
                   >
                     <div className="relative size-24 shrink-0 overflow-hidden rounded-[1.1rem] bg-sand">
                       {l.image && <Image src={l.image} alt={localized(l, "title", lang)} fill sizes="96px" className="object-cover" />}
@@ -80,18 +84,23 @@ export function CartDrawer() {
                         <div className="min-w-0">
                           <p className="truncate text-sm font-medium">{localized(l, "title", lang)}</p>
                           <p className="text-xs text-muted">{l.merchantName}</p>
+                          {l.unavailable ? (
+                            <p className="text-xs text-ember">{t.unavailable}</p>
+                          ) : (
+                            l.stock !== undefined && l.stock <= 3 && <p className="text-xs text-ember">{fmt(t.onlyLeft, { n: l.stock })}</p>
+                          )}
                         </div>
                         <button onClick={() => remove(l.productId)} className="text-xs text-muted underline-offset-2 hover:underline">
                           {common.remove}
                         </button>
                       </div>
-                      <div className="mt-auto flex items-center justify-between">
+                      <div className={cn("mt-auto flex items-center justify-between", l.unavailable && "invisible")}>
                         <div className="flex items-center gap-1 rounded-full bg-paper p-1 ring-1 ring-ink/5">
                           <button aria-label={t.decrease} onClick={() => setQty(l.productId, l.quantity - 1)} className="flex size-7 items-center justify-center rounded-full hover:bg-ink/5">
                             <Minus className="size-3" />
                           </button>
                           <span className="w-5 text-center text-sm tabular-nums">{l.quantity}</span>
-                          <button aria-label={t.increase} onClick={() => setQty(l.productId, l.quantity + 1)} className="flex size-7 items-center justify-center rounded-full hover:bg-ink/5">
+                          <button aria-label={t.increase} disabled={l.stock !== undefined && l.quantity >= l.stock} onClick={() => setQty(l.productId, l.quantity + 1)} className="flex size-7 items-center justify-center rounded-full hover:bg-ink/5">
                             <Plus className="size-3" />
                           </button>
                         </div>
@@ -103,7 +112,7 @@ export function CartDrawer() {
               </AnimatePresence>
             </div>
 
-            {lines.length > 0 && (
+            {total > 0 && (
               <div className="mt-2 rounded-[1.6rem] bg-ink p-5 text-paper">
                 <div className="flex items-baseline justify-between">
                   <span className="text-sm text-paper/60">{t.total}</span>

@@ -2,6 +2,7 @@ import "server-only";
 import { cert, getApps, initializeApp, type App } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
+import { getStorage } from "firebase-admin/storage";
 
 const projectId = process.env.FIREBASE_PROJECT_ID;
 const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
@@ -25,3 +26,9 @@ function adminApp() {
 
 export const adminDb = () => getFirestore(adminApp());
 export const adminAuth = () => getAuth(adminApp());
+
+/** The project's Storage bucket (same one the web SDK uploads to), or null when it isn't configured. */
+export const adminBucket = () => {
+  const name = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
+  return name ? getStorage(adminApp()).bucket(name) : null;
+};

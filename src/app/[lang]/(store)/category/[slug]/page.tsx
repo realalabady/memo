@@ -1,4 +1,6 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { alternates, clip } from "@/lib/seo";
 import { Suspense } from "react";
 import { CategoryPills, GridSkeleton, ListingHeader } from "@/components/store/listing";
 import { ProductGrid } from "@/components/store/product-card";
@@ -10,6 +12,18 @@ import { getCategories, getCategoryBySlug, getProducts, staticParamsOrPlaceholde
 export async function generateStaticParams() {
   const categories = await getCategories();
   return staticParamsOrPlaceholder("slug", categories.map((c) => c.slug));
+}
+
+export async function generateMetadata({ params }: PageProps<"/[lang]/category/[slug]">): Promise<Metadata> {
+  const { slug } = await params;
+  const [category, lang] = await Promise.all([getCategoryBySlug(decodeURIComponent(slug)), getLocale()]);
+  if (!category) return {};
+  return {
+    title: localized(category, "name", lang),
+    description: clip(localized(category, "blurb", lang)) || undefined,
+    alternates: alternates(lang, `/category/${category.slug}`),
+    openGraph: category.image ? { images: [{ url: category.image }] } : undefined,
+  };
 }
 
 async function CategoryContent({ params }: { params: Promise<{ slug: string }> }) {

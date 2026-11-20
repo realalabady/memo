@@ -17,7 +17,7 @@ const home: Record<Role, string> = { admin: "/admin", merchant: "/merchant", cus
 export function AuthForm({ mode }: { mode: "login" | "signup" }) {
   const t = useT().auth;
   const common = useT().common;
-  const { signIn, signUp, signInWithGoogle, enterDemo, demo, profile } = useAuth();
+  const { signIn, signUp, signInWithGoogle, enterDemo, demo, profile, resetPassword } = useAuth();
   const router = useRouter();
   const next = safeNext(useSearchParams().get("next"));
   const [busy, setBusy] = useState(false);
@@ -94,6 +94,19 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
                 {mode === "signup" && <Field label={t.fullName} name="name" required autoComplete="name" />}
                 <Field label={t.email} name="email" type="email" dir="ltr" required autoComplete="email" />
                 <Field label={t.password} name="password" type="password" dir="ltr" required minLength={8} autoComplete={mode === "login" ? "current-password" : "new-password"} />
+                {mode === "login" && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      const email = String(new FormData(e.currentTarget.form!).get("email") ?? "").trim();
+                      if (!email) return toast.error(t.enterEmailFirst);
+                      resetPassword(email).then(() => toast(t.resetSent));
+                    }}
+                    className="block text-xs text-muted underline-offset-4 hover:text-ink hover:underline"
+                  >
+                    {t.forgot}
+                  </button>
+                )}
                 <Button type="submit" disabled={busy} className="w-full justify-between">
                   {mode === "login" ? common.signIn : t.createAccount}
                 </Button>

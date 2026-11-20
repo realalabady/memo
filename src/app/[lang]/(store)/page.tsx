@@ -8,7 +8,8 @@ import { Reveal, Stagger, StaggerItem } from "@/components/ui/motion";
 import { ButtonLink, Eyebrow, ProviderChip } from "@/components/ui/primitives";
 import { localized } from "@/i18n/config";
 import { getDictionary, getLocale } from "@/i18n/server";
-import { getCategories, getMerchants, getProducts } from "@/lib/server/catalog";
+import { getCategories, getMerchants, getProducts, getStorefront } from "@/lib/server/catalog";
+import type { HomeSection, Product } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 // Asymmetric bento spans for the category grid
@@ -22,23 +23,41 @@ const spans = [
 ];
 
 export default async function HomePage() {
-  const [categories, products, merchants, dict, lang] = await Promise.all([
+  const [allCategories, products, merchants, dict, lang, sf] = await Promise.all([
     getCategories(),
     getProducts(),
     getMerchants(),
     getDictionary(),
     getLocale(),
+    getStorefront(),
   ]);
   const t = dict.home;
-  // One product from each of the first categories, topped up with the newest products.
-  const heroPicks = [...new Set([...categories.map((c) => products.find((p) => p.categoryId === c.id)), ...products])]
-    .filter((p) => p !== undefined)
-    .slice(0, 3);
+  const ar = lang === "ar";
+  const byId = new Map(products.map((p) => [p.id, p]));
+  // Picks that were unpublished since the admin chose them simply drop out.
+  const pick = (ids: string[]) => ids.map((id) => byId.get(id)).filter((p): p is Product => p !== undefined);
+  const categories = sf.featuredCategoryIds.length ? allCategories.filter((c) => sf.featuredCategoryIds.includes(c.id)) : allCategories;
 
-  return (
-    <>
-      <Hero products={heroPicks} />
+  // Hero: the admin's picks, else one product from each of the first categories, topped up with the newest.
+  const chosen = pick(sf.heroProductIds).filter((p) => p.images?.[0]);
+  const heroPicks = (
+    chosen.length ? chosen : [...new Set([...allCategories.map((c) => products.find((p) => p.categoryId === c.id)), ...products])].filter((p) => p !== undefined)
+  ).slice(0, 3);
+  const featured = sf.featuredProductIds.length ? pick(sf.featuredProductIds) : products.slice(0, 8);
+  const copy = {
+    l1: ar ? sf.hero.l1Ar : sf.hero.l1,
+    l2: ar ? sf.hero.l2Ar : sf.hero.l2,
+    l3: ar ? sf.hero.l3Ar : sf.hero.l3,
+    body: ar ? sf.hero.bodyAr : sf.hero.body,
+  };
+  const b = sf.banner;
+  const bannerTitle = (ar ? b.titleAr : b.title) || b.title || b.titleAr;
+  const bannerSubtitle = (ar ? b.subtitleAr : b.subtitle) || "";
 
+  const sections: Record<HomeSection, React.ReactNode> = {
+
+    categories: (
+      <div key="categories">
       {/* Marquee */}
       <div className="overflow-hidden border-y border-ink/[0.06] bg-cream/50 py-5">
         <div className="flex w-max animate-marquee gap-12 whitespace-nowrap">
@@ -88,9 +107,34 @@ export default async function HomePage() {
           </Stagger>
         </div>
       </section>
-
-      {/* Featured */}
-      <section className="px-4 pb-24 md:pb-36">
+      </div>
+    ),
+    banner:
+      b.enabled && b.image && bannerTitle ? (
+        <section key="banner" className="px-4 pb-24 md:pb-36">
+          <Reveal className="mx-auto max-w-7xl">
+            <Link
+              href={b.link || "/shop"}
+              className="group relative block overflow-hidden rounded-[2.5rem] bg-sand ring-1 ring-ink/[0.06]"
+            >
+              <div className="relative aspect-[4/3] sm:aspect-[21/9]">
+                <Image src={b.image} alt="" fill sizes="(min-width: 1280px) 1280px, 100vw" className="object-cover transition-transform duration-[1.6s] ease-[var(--ease-fluid)] group-hover:scale-[1.03]" />
+              </div>
+              <div className="absolute inset-0 bg-gradient-to-t from-ink/75 via-ink/20 to-transparent sm:bg-gradient-to-r sm:rtl:bg-gradient-to-l" />
+              <div className="absolute inset-x-0 bottom-0 p-6 text-paper sm:inset-y-0 sm:flex sm:max-w-xl sm:flex-col sm:justify-end sm:p-12">
+                <p className="font-display text-4xl leading-[0.95] italic md:text-6xl">{bannerTitle}</p>
+                {bannerSubtitle && <p className="mt-3 max-w-md text-sm text-paper/75 md:text-base">{bannerSubtitle}</p>}
+                <span className="mt-6 inline-flex w-fit items-center gap-2 rounded-full bg-paper px-5 py-2.5 text-sm text-ink">
+                  {dict.cms.bannerCta}
+                  <ArrowUpRight weight="light" className="size-4 rtl:-scale-x-100" />
+                </span>
+              </div>
+            </Link>
+          </Reveal>
+        </section>
+      ) : null,
+    featured: featured.length ? (
+      <section key="featured" className="px-4 pb-24 md:pb-36">
         <div className="mx-auto max-w-7xl">
           <Reveal className="mb-14 flex items-end justify-between gap-6">
             <h2 className="font-display text-5xl leading-[0.95] md:text-7xl">
@@ -101,13 +145,13 @@ export default async function HomePage() {
             </Link>
           </Reveal>
           <Reveal delay={0.1}>
-            <ProductGrid products={products.slice(0, 8)} />
+            <ProductGrid products={featured} />
           </Reveal>
         </div>
       </section>
-
-      {/* How pay-in-4 works */}
-      <section id="how" className="scroll-mt-28 px-4 pb-24 md:pb-36">
+    ) : null,
+    how: (
+      <section key="how" id="how" className="scroll-mt-28 px-4 pb-24 md:pb-36">
         <div className="mx-auto grid max-w-7xl gap-6 md:grid-cols-12">
           <Reveal className="md:col-span-5">
             <Eyebrow>{t.howEyebrow}</Eyebrow>
@@ -139,9 +183,9 @@ export default async function HomePage() {
           </Stagger>
         </div>
       </section>
-
-      {/* Stores */}
-      <section className="px-4 pb-24 md:pb-36">
+    ),
+    stores: merchants.length ? (
+      <section key="stores" className="px-4 pb-24 md:pb-36">
         <div className="mx-auto max-w-7xl">
           <Reveal className="mb-10">
             <h2 className="font-display text-5xl leading-[0.95] md:text-6xl">
@@ -169,9 +213,9 @@ export default async function HomePage() {
           </div>
         </div>
       </section>
-
-      {/* Merchant CTA */}
-      <section className="px-4">
+    ) : null,
+    sell: (
+      <section key="sell" className="px-4">
         <Reveal className="mx-auto max-w-7xl">
           <div className="relative overflow-hidden rounded-[2.5rem] bg-ink-2 px-6 py-20 text-paper md:px-16 md:py-28">
             <div aria-hidden className="pointer-events-none absolute -bottom-32 -end-20 size-[520px] rounded-full bg-ember/25 blur-[120px]" />
@@ -192,6 +236,13 @@ export default async function HomePage() {
           </div>
         </Reveal>
       </section>
+    ),
+  };
+
+  return (
+    <>
+      <Hero products={heroPicks} copy={copy} />
+      {sf.sections.filter((x) => x.visible).map((x) => sections[x.id])}
     </>
   );
 }

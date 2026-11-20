@@ -6,6 +6,7 @@ import { dirOf, isLocale, locales } from "@/i18n/config";
 import { I18nProvider } from "@/i18n/client";
 import { getDictionary } from "@/i18n/server";
 import { AuthProvider } from "@/lib/auth/auth-provider";
+import { alternates, siteUrl } from "@/lib/seo";
 import "../globals.css";
 
 const geist = Geist({ variable: "--font-geist", subsets: ["latin"] });
@@ -33,9 +34,19 @@ export async function generateMetadata({ params }: LayoutProps<"/[lang]">): Prom
   if (!isLocale(lang)) return {};
   const dict = await getDictionary();
   return {
+    metadataBase: new URL(siteUrl()),
     title: { default: dict.meta.title, template: "%s · memo" },
     description: dict.meta.description,
-    alternates: { languages: Object.fromEntries(locales.map((l) => [l, `/${l}`])) },
+    alternates: alternates(lang, "/"),
+    openGraph: {
+      type: "website",
+      siteName: "memo",
+      locale: lang === "ar" ? "ar_SA" : "en_SA",
+      alternateLocale: lang === "ar" ? "en_SA" : "ar_SA",
+      title: dict.meta.title,
+      description: dict.meta.description,
+    },
+    twitter: { card: "summary_large_image" },
   };
 }
 

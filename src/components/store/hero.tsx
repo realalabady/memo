@@ -19,8 +19,10 @@ const mobileTiles = [
 ];
 
 /** Editorial split + Z-axis cascade of floating product cards. */
-export function Hero({ products }: { products: Product[] }) {
-  const t = useT().hero;
+export function Hero({ products, copy }: { products: Product[]; copy?: { l1: string; l2: string; l3: string; body: string } }) {
+  const dict = useT().hero;
+  // Admin-edited copy (settings/storefront) wins; empty lines keep the built-in wording.
+  const t = { ...dict, l1: copy?.l1 || dict.l1, l2: copy?.l2 || dict.l2, l3: copy?.l3 || dict.l3, body: copy?.body || dict.body };
   const { money, lang } = useFormat();
   const ref = useRef<HTMLDivElement>(null);
   const { scrollYProgress } = useScroll({ target: ref, offset: ["start start", "end start"] });
