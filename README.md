@@ -67,7 +67,19 @@ Checks: `npm run typecheck`, `npm run lint`, `npm test`, `npm run test:rules` (F
 **Site**
 - [ ] `NEXT_PUBLIC_APP_URL` = your public https address (used for payment redirects, webhooks, canonical links and the sitemap). The server refuses to start in production without it.
 - [ ] `PAYMENTS_DEMO` is **unset** (the server refuses to start in production if it is set).
-- [ ] `CRON_SECRET` set. On Vercel, `vercel.json` runs `/api/cron/expire-orders` every 15 minutes; elsewhere call it with `Authorization: Bearer $CRON_SECRET`.
+- [ ] `CRON_SECRET` set, and `/api/cron/expire-orders` called every 15 minutes with `Authorization: Bearer $CRON_SECRET`. On Firebase App Hosting use a Cloud Scheduler job (see "Deploy on Firebase App Hosting"); on Vercel, `vercel.json` schedules it.
+
+### Deploy on Firebase App Hosting
+
+`apphosting.yaml` holds the production config. Server credentials come from the backend's service account, so no key file is needed. Requires the Blaze plan.
+
+1. Create the secrets (each command also grants the backend access): `npx firebase apphosting:secrets:set ADMIN_EMAILS` and `npx firebase apphosting:secrets:set CRON_SECRET`.
+2. Create the backend from the Firebase console (App Hosting → Get started), connect the GitHub repo, branch `main`, root `/`, backend ID `memo`, region `europe-west4`. A different ID or region changes the URL, so update `NEXT_PUBLIC_APP_URL` in `apphosting.yaml` to match.
+3. Every push to `main` rolls out. Open the URL, sign in with an `ADMIN_EMAILS` account.
+4. Schedule the cron:
+   ```
+   gcloud scheduler jobs create http expire-orders --project memo-3f85d --location europe-west4 --schedule "*/15 * * * *" --http-method GET --uri "https://memo--memo-3f85d.europe-west4.hosted.app/api/cron/expire-orders" --headers "Authorization=Bearer <CRON_SECRET>"
+   ```
 
 **Payments (Admin › Payments)** — paste the keys there; they are stored server-side only (Firestore `secrets/payments`, closed to all clients), shown masked, and saving needs a sign-in from the last 10 minutes. The environment variables below still work as a fallback.
 

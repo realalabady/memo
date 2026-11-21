@@ -1,0 +1,53 @@
+# Firebase App Hosting config (https://firebase.google.com/docs/app-hosting/configure).
+# Server credentials come from the backend's runtime service account (ADC), so no
+# service-account key is needed — that's why we host here and not on Vercel.
+#
+# Values here are committed: only put public config in `value:`. Anything private is a
+# `secret:` stored in Cloud Secret Manager — create it first, or the rollout fails:
+#   npx firebase apphosting:secrets:set <NAME>
+# Console env vars override this file.
+
+runConfig:
+  minInstances: 0
+  maxInstances: 4
+  concurrency: 80
+  cpu: 1
+  memoryMiB: 1024
+
+env:
+  # Public origin — used for Tabby/Tamara redirect + webhook URLs, canonical links and the sitemap.
+  # Must match your backend URL (https://<backend-id>--<project-id>.<region>.hosted.app) or custom domain.
+  - variable: NEXT_PUBLIC_APP_URL
+    value: https://memo--memo-3f85d.europe-west4.hosted.app
+
+  # Firebase web SDK — public by design (shipped to every browser).
+  - variable: NEXT_PUBLIC_FIREBASE_API_KEY
+    value: AIzaSyBheaKPbDHnUdVREuPTLu8G68LG8-K_7W8
+  - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+    value: memo-3f85d.firebaseapp.com
+  - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
+    value: memo-3f85d
+  - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+    value: memo-3f85d.firebasestorage.app
+  - variable: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+    value: "748007157883"
+  - variable: NEXT_PUBLIC_FIREBASE_APP_ID
+    value: 1:748007157883:web:e30e4873a98b1d02a472de
+
+  # Firebase Admin via Application Default Credentials (the App Hosting service account).
+  - variable: FIREBASE_PROJECT_ID
+    value: memo-3f85d
+  - variable: FIREBASE_USE_ADC
+    value: "true"
+
+  # Private — stored in Cloud Secret Manager.
+  - variable: ADMIN_EMAILS
+    secret: ADMIN_EMAILS
+    availability:
+      - RUNTIME
+  - variable: CRON_SECRET
+    secret: CRON_SECRET
+    availability:
+      - RUNTIME
+
+  # Tabby/Tamara keys are set in the app at /admin/payments (stored in Firestore `secrets/payments`).

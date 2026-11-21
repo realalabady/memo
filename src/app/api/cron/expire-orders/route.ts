@@ -5,7 +5,7 @@ import type { Order } from "@/lib/types";
 
 /**
  * Releases stock held by abandoned checkouts. Schedule every 10–15 minutes
- * (vercel.json cron, or any scheduler) with `Authorization: Bearer $CRON_SECRET`.
+ * (Cloud Scheduler on App Hosting, vercel.json on Vercel) with `Authorization: Bearer $CRON_SECRET`.
  * Each order is re-checked with Tabby/Tamara first, so a paid order is never expired.
  */
 function authorized(req: Request) {
