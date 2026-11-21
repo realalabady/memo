@@ -1,4 +1,5 @@
 import "server-only";
+import { getPaymentKeys } from "@/lib/server/payment-config";
 import type { Order } from "@/lib/types";
 
 /**
@@ -6,16 +7,15 @@ import type { Order } from "@/lib/types";
  * so every payment settles into the marketplace owner's Tabby account.
  * Docs: https://docs.tabby.ai
  */
-const API = () => (process.env.TABBY_API_URL ?? "https://api.tabby.ai").replace(/\/$/, "");
-const key = () => process.env.TABBY_SECRET_KEY ?? "";
 
-export const tabbyConfigured = () => Boolean(process.env.TABBY_SECRET_KEY && process.env.TABBY_MERCHANT_CODE);
+export { tabbyConfigured } from "@/lib/server/payment-config";
 
 async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const res = await fetch(`${API()}${path}`, {
+  const { apiUrl, secretKey } = (await getPaymentKeys()).tabby;
+  const res = await fetch(`${apiUrl}${path}`, {
     ...init,
     headers: {
-      Authorization: `Bearer ${key()}`,
+      Authorization: `Bearer ${secretKey}`,
       "Content-Type": "application/json",
       ...init.headers,
     },
@@ -78,7 +78,7 @@ export async function createTabbySession(order: Order, base: string, buyerSince?
         order_history: [],
       },
       lang,
-      merchant_code: process.env.TABBY_MERCHANT_CODE,
+      merchant_code: (await getPaymentKeys()).tabby.merchantCode,
       merchant_urls: {
         success: ret("success"),
         cancel: ret("cancel"),

@@ -11,6 +11,7 @@ import { localized } from "@/i18n/config";
 import { useFormat, useT } from "@/i18n/client";
 import { useAuth } from "@/lib/auth/auth-provider";
 import { useAddresses, useCustomerOrders } from "@/lib/data/hooks";
+import { friendlyError, useFormErrors } from "@/lib/form-errors";
 import { deleteAddress, saveAddress, updateOwnProfile } from "@/lib/data/mutations";
 import { shortId } from "@/lib/utils";
 
@@ -26,6 +27,8 @@ export default function AccountPage() {
   const { data: orders, loading: ordersLoading } = useCustomerOrders(user?.uid ?? null);
   const { data: addresses } = useAddresses(demo ? null : (user?.uid ?? null));
   const [adding, setAdding] = useState(false);
+  const validation = useT().validation;
+  const addressForm = useFormErrors();
 
   useEffect(() => {
     if (!loading && !user) router.replace("/login?next=/account");
@@ -38,7 +41,7 @@ export default function AccountPage() {
       await fn();
       toast(done);
     } catch (err) {
-      toast.error((err as Error).message);
+      toast.error(friendlyError(err, validation, common.somethingWrong));
     }
   }
 
@@ -50,6 +53,7 @@ export default function AccountPage() {
 
   function addAddress(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (!addressForm.validate(e.currentTarget)) return;
     const f = new FormData(e.currentTarget);
     const get = (k: string) => String(f.get(k) ?? "");
     run(async () => {
@@ -61,6 +65,7 @@ export default function AccountPage() {
         city: get("city"),
         line1: get("line1"),
         zip: get("zip"),
+        nationalAddress: get("nationalAddress").trim().toUpperCase(),
         label: get("label"),
       });
       setAdding(false);
@@ -83,7 +88,7 @@ export default function AccountPage() {
             {!merchant && profile?.role === "customer" && <Link href="/sell" className="rounded-full px-4 py-2 text-sm ring-1 ring-ink/10">{t.openStore}</Link>}
             {merchant?.status === "pending" && <span className="rounded-full bg-sand px-4 py-2 text-sm">{t.underReview}</span>}
             <Link href="/account/wishlist" className="rounded-full px-4 py-2 text-sm ring-1 ring-ink/10">{wishlistT.link}</Link>
-            <Button size="sm" variant="ghost" onClick={() => signOut().then(() => router.push("/"))}>{common.signOut}</Button>
+            <Button size="sm" variant="ghost" onClick={() => signOut()}>{common.signOut}</Button>
           </div>
         </Reveal>
 
@@ -153,6 +158,7 @@ export default function AccountPage() {
                     <div className="min-w-0 text-sm">
                       <p className="font-medium">{a.label || `${a.firstName} ${a.lastName}`}</p>
                       <p className="text-muted">{a.line1}, {a.city}{a.zip ? ` ${a.zip}` : ""}</p>
+                      {a.nationalAddress && <p className="text-muted">{checkout.nationalAddress}: <span dir="ltr">{a.nationalAddress}</span></p>}
                       <p className="text-muted" dir="ltr">{a.phone}</p>
                     </div>
                     <button onClick={() => run(() => deleteAddress(user.uid, a.id), t.addressDeleted)} className="shrink-0 text-xs text-muted underline-offset-2 hover:text-ember hover:underline">
@@ -162,17 +168,18 @@ export default function AccountPage() {
                 ))}
                 {adding ? (
                   <Bezel innerClassName="p-5">
-                    <form onSubmit={addAddress} className="grid gap-3 sm:grid-cols-2">
-                      <Field className="sm:col-span-2" label={t.addressLabel} name="label" maxLength={40} />
-                      <Field label={checkout.firstName} name="firstName" required maxLength={60} autoComplete="given-name" />
-                      <Field label={checkout.lastName} name="lastName" required maxLength={60} autoComplete="family-name" />
-                      <Field label={checkout.mobile} name="phone" type="tel" dir="ltr" required minLength={8} maxLength={20} placeholder="+9665XXXXXXXX" autoComplete="tel" />
-                      <Field label={checkout.city} name="city" required maxLength={60} autoComplete="address-level2" />
-                      <Field className="sm:col-span-2" label={checkout.street} name="line1" required minLength={3} maxLength={200} autoComplete="street-address" />
-                      <Field label={checkout.zip} name="zip" dir="ltr" maxLength={10} autoComplete="postal-code" />
-                      <div className="flex items-end gap-2">
+                    <form onSubmit={addAddress} onInput={addressForm.clear} noValidate className="grid gap-3 sm:grid-cols-2">
+                      <Field className="sm:col-span-2" label={t.addressLabel} name="label" maxLength={40} error={addressForm.errors.label} />
+                      <Field label={checkout.firstName} name="firstName" required maxLength={60} autoComplete="given-name" error={addressForm.errors.firstName} />
+                      <Field label={checkout.lastName} name="lastName" required maxLength={60} autoComplete="family-name" error={addressForm.errors.lastName} />
+                      <Field label={checkout.mobile} name="phone" type="tel" dir="ltr" required minLength={8} maxLength={20} placeholder="+9665XXXXXXXX" autoComplete="tel" error={addressForm.errors.phone} />
+                      <Field label={checkout.city} name="city" required maxLength={60} autoComplete="address-level2" error={addressForm.errors.city} />
+                      <Field className="sm:col-span-2" label={checkout.street} name="line1" required minLength={3} maxLength={200} autoComplete="street-address" error={addressForm.errors.line1} />
+                      <Field label={checkout.nationalAddress} name="nationalAddress" dir="ltr" maxLength={8} pattern="[A-Za-z]{4}[0-9]{4}" title={checkout.nationalAddressHint} placeholder="RRRD2929" autoCapitalize="characters" style={{ textTransform: "uppercase" }} error={addressForm.errors.nationalAddress} />
+                      <Field label={checkout.zip} name="zip" dir="ltr" maxLength={10} autoComplete="postal-code" error={addressForm.errors.zip} />
+                      <div className="flex items-center gap-2 sm:col-span-2">
                         <Button type="submit" size="sm" trailing={false}>{common.save}</Button>
-                        <button type="button" onClick={() => setAdding(false)} className="px-3 py-2 text-xs text-muted">{common.cancel}</button>
+                        <button type="button" onClick={() => { setAdding(false); addressForm.reset(); }} className="px-3 py-2 text-xs text-muted">{common.cancel}</button>
                       </div>
                     </form>
                   </Bezel>

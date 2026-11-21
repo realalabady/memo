@@ -10,7 +10,12 @@ const authCalls = vi.hoisted(() => ({ claims: [] as unknown[], disabled: [] as u
 vi.mock("@/lib/firebase/admin", async (importOriginal) => {
   const real = await importOriginal<typeof import("@/lib/firebase/admin")>();
   const fakeAuth = {
-    verifyIdToken: async (token: string) => ({ uid: token, email: `${token}@test.sa` }),
+    // "stale-admin" signed in an hour ago (for the fresh-sign-in check); everyone else just now.
+    verifyIdToken: async (token: string) => ({
+      uid: token,
+      email: `${token}@test.sa`,
+      auth_time: Math.floor(Date.now() / 1000) - (token === "stale-admin" ? 3600 : 5),
+    }),
     getUser: async (uid: string) => {
       if (uid === "ghost") throw new Error("not found");
       return { uid, email: uid === "envadmin" ? "boss@memo.sa" : `${uid}@test.sa`, customClaims: {} };
@@ -33,6 +38,10 @@ const merchantProduct = await import("@/app/api/merchant/products/[id]/route");
 const storefront = await import("@/app/api/admin/storefront/route");
 const pages = await import("@/app/api/admin/pages/[slug]/route");
 const users = await import("@/app/api/admin/users/[id]/route");
+const merchants = await import("@/app/api/admin/merchants/[id]/route");
+const payments = await import("@/app/api/admin/payments/route");
+const checkout = await import("@/app/api/checkout/route");
+const { getPaymentKeys, invalidatePaymentConfig } = await import("@/lib/server/payment-config");
 const stats = await import("@/app/api/admin/stats/route");
 const exportCsv = await import("@/app/api/admin/transactions/export/route");
 const { getLegalPage } = await import("@/lib/server/catalog");
@@ -52,12 +61,14 @@ async function wipe(...collections: string[]) {
 }
 
 beforeEach(async () => {
-  await wipe("categories", "products", "settings", "pages", "merchantOrders", "payouts", "users", "merchants", "auditLogs");
+  await wipe("categories", "products", "settings", "pages", "merchantOrders", "payouts", "users", "merchants", "auditLogs", "secrets");
+  invalidatePaymentConfig();
   const db = adminDb();
   await db.doc("users/admin").set({ role: "admin" });
   await db.doc("users/m1").set({ role: "merchant" });
   await db.doc("users/alice").set({ role: "customer" });
   await db.doc("users/envadmin").set({ role: "admin" });
+  await db.doc("users/stale-admin").set({ role: "admin" });
   await db.doc("merchants/m1").set({ storeName: "Store", slug: "store", status: "approved" });
   await db.doc("categories/home").set({ name: "Home", slug: "home", order: 1 });
   await db.doc("categories/beauty").set({ name: "Beauty", slug: "beauty", order: 2 });
@@ -215,6 +226,19 @@ describe("legal pages", () => {
   });
 });
 
+describe("store approval", () => {
+  it("approves with a status-only change and records it (no commission in the request)", async () => {
+    await adminDb().doc("merchants/m2").set({ storeName: "New", slug: "new", status: "pending" });
+    await adminDb().doc("users/m2").set({ role: "customer" });
+    const res = await merchants.PATCH(req("admin", "PATCH", { status: "approved" }), ctx({ id: "m2" }));
+    expect(res.status).toBe(200);
+    expect((await doc("merchants/m2").get()).data()?.status).toBe("approved");
+    expect((await doc("users/m2").get()).data()?.role).toBe("merchant");
+    const logs = await adminDb().collection("auditLogs").where("target", "==", "merchants/m2").get();
+    expect(logs.size).toBe(1);
+  });
+});
+
 describe("users", () => {
   it("grants admin and keeps a store owner's merchant role when it is removed", async () => {
     await users.PATCH(req("admin", "PATCH", { admin: true }), ctx({ id: "m1" }));
@@ -277,5 +301,68 @@ describe("stats and CSV export", () => {
     expect(tamaraPaid).toContain('"o2"');
     expect(tamaraPaid).not.toContain('"o1"');
     expect((await exportCsv.GET(req("alice"))).status).toBe(403);
+  });
+});
+
+describe("payment keys", () => {
+  const SECRET = "sk_test_ABCDEFGHIJKLMNOP1234";
+
+  it("saves keys server-side and only ever returns them masked", async () => {
+    const put = await payments.PUT(req("admin", "PUT", { tabby: { secretKey: SECRET, merchantCode: "memo_sa" }, tamara: { apiToken: "tamara-token-xyz-9876" } }));
+    expect(put.status).toBe(200);
+    invalidatePaymentConfig();
+    expect((await getPaymentKeys()).tabby.secretKey).toBe(SECRET);
+
+    const res = await payments.GET(req("admin"));
+    const text = await res.clone().text();
+    expect(text).not.toContain(SECRET);
+    expect(text).not.toContain("tamara-token-xyz-9876");
+    const body = await res.json();
+    expect(body.tabby).toMatchObject({ merchantCode: "memo_sa", configured: true, testMode: true });
+    expect(body.tabby.secretKey).toMatch(/…1234$/);
+    expect(body.sources.tabby.secretKey).toBe("dashboard");
+
+    const logs = await adminDb().collection("auditLogs").where("action", "==", "admin.payments.update").get();
+    expect(JSON.stringify(logs.docs.map((d) => d.data()))).not.toContain(SECRET);
+  });
+
+  it("requires a recent sign-in to change keys, but not to switch a provider on or off", async () => {
+    expect((await payments.PUT(req("stale-admin", "PUT", { tabby: { secretKey: SECRET } }))).status).toBe(401);
+    expect((await payments.PUT(req("stale-admin", "PUT", { tabbyEnabled: false }))).status).toBe(200);
+    expect((await doc("settings/platform").get()).data()?.tabbyEnabled).toBe(false);
+  });
+
+  it("only allows the official API hosts and valid key shapes", async () => {
+    expect((await payments.PUT(req("admin", "PUT", { tabby: { apiUrl: "https://evil.test" } }))).status).toBe(400);
+    expect((await payments.PUT(req("admin", "PUT", { tamara: { apiUrl: "http://api.tamara.co" } }))).status).toBe(400);
+    expect((await payments.PUT(req("admin", "PUT", { tabby: { secretKey: "not-a-key" } }))).status).toBe(400);
+  });
+
+  it("checkout refuses a provider the admin switched off", async () => {
+    await adminDb().doc("settings/platform").set({ tabbyEnabled: false }, { merge: true });
+    const body = {
+      provider: "tabby",
+      items: [{ productId: "p", quantity: 1 }],
+      customer: { firstName: "Sara", lastName: "A", email: "s@a.sa", phone: "0551234567", city: "Riyadh", line1: "King Fahd Rd" },
+    };
+    const res = await json(await checkout.POST(req("alice", "POST", body)));
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/turned off/);
+  });
+
+  it("is admin-only", async () => {
+    expect((await payments.GET(req("m1"))).status).toBe(403);
+    expect((await payments.PUT(req("alice", "PUT", { tabbyEnabled: false }))).status).toBe(403);
+  });
+
+  it("removing a saved key falls back to the server environment variable", async () => {
+    process.env.TAMARA_API_TOKEN = "env-token-0000";
+    await payments.PUT(req("admin", "PUT", { tamara: { apiToken: "dash-token-1111" } }));
+    invalidatePaymentConfig();
+    expect((await getPaymentKeys()).tamara.apiToken).toBe("dash-token-1111");
+    await payments.PUT(req("admin", "PUT", { clear: ["tamara.apiToken"] }));
+    invalidatePaymentConfig();
+    expect((await getPaymentKeys()).tamara.apiToken).toBe("env-token-0000");
+    delete process.env.TAMARA_API_TOKEN;
   });
 });

@@ -92,7 +92,9 @@ export function ProductForm({ product }: { product?: Product }) {
           <Field label={t.price} name="price" type="number" dir="ltr" min={1} step="0.01" required defaultValue={product?.price} />
           <Field label={t.compareAt} name="compareAtPrice" type="number" dir="ltr" min={0} step="0.01" defaultValue={product?.compareAtPrice} />
           <Field label={t.stock} name="stock" type="number" dir="ltr" min={0} required defaultValue={product?.stock ?? 10} />
-          <SelectField label={t.category} name="categoryId" required defaultValue={product?.categoryId}>
+          {/* Remount once categories load: an uncontrolled select can only apply defaultValue to options that exist at mount,
+              otherwise the browser picks the first category and saving would silently move the product. */}
+          <SelectField key={categories.length ? "ready" : "loading"} label={t.category} name="categoryId" required defaultValue={product?.categoryId}>
             {categories.map((c) => (
               <option key={c.id} value={c.id}>{localized(c, "name", lang)}</option>
             ))}

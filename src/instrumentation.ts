@@ -6,15 +6,16 @@ export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
 
   const client = Boolean(process.env.NEXT_PUBLIC_FIREBASE_API_KEY && process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID);
-  const admin = Boolean(
-    process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY,
-  );
+  const admin =
+    Boolean(process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY) ||
+    Boolean(process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_USE_ADC === "true") ||
+    (process.env.NODE_ENV !== "production" && Boolean(process.env.FIRESTORE_EMULATOR_HOST));
   const problems: string[] = [];
 
   // Mixed config = storefront on sample data while dashboards write to real Firestore.
   if (client !== admin) {
     problems.push(
-      "Firebase is half-configured: set BOTH the NEXT_PUBLIC_FIREBASE_* web keys and the FIREBASE_* admin keys (or neither, for demo mode).",
+      "Firebase is half-configured: set BOTH the NEXT_PUBLIC_FIREBASE_* web keys and the server credentials (FIREBASE_* key, or FIREBASE_USE_ADC=true), or neither for demo mode.",
     );
   }
 

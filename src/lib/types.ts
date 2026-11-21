@@ -49,11 +49,17 @@ export interface Merchant {
 export interface MerchantContact {
   email: string;
   phone: string;
-  /** Commercial registration number */
-  crNumber: string;
+  /** cr = commercial registration, freelance = وثيقة العمل الحر, none = neither. Older docs have no type (cr). */
+  businessType?: BusinessType;
+  /** Commercial registration (unified) number: 10 digits starting with 7 */
+  crNumber?: string;
+  /** Freelance document number, normalised to FL-<digits> */
+  freelanceNumber?: string;
   vatNumber?: string;
   updatedAt: number;
 }
+
+export type BusinessType = "cr" | "freelance" | "none";
 
 export const MERCHANT_TERMS_VERSION = "2026-11";
 
@@ -143,6 +149,8 @@ export interface Address {
   city: string;
   line1: string;
   zip?: string;
+  /** Saudi National Address short code, e.g. RRRD2929 (4 letters + 4 digits). */
+  nationalAddress?: string;
 }
 
 export interface Order {
@@ -247,6 +255,9 @@ export interface PlatformSettings {
   vatNumber: string;
   /** A paid order becomes payable this many days after it is delivered */
   payoutHoldDays: number;
+  /** Shown at checkout; switched at Admin › Payments (keys themselves live server-side in secrets/payments) */
+  tabbyEnabled?: boolean;
+  tamaraEnabled?: boolean;
 }
 
 /** Money owed back by a merchant after a refund on an order that was already paid out. */
@@ -273,6 +284,8 @@ export const DEFAULT_SETTINGS: PlatformSettings = {
   sellerName: "memo marketplace",
   vatNumber: "",
   payoutHoldDays: 3,
+  tabbyEnabled: true,
+  tamaraEnabled: true,
 };
 
 /** Home page building blocks, in the order the admin arranges them. */

@@ -10,7 +10,11 @@
     "seed": "tsx scripts/seed.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:rules": "firebase emulators:exec --only firestore,storage --project memo-rules-test \"vitest run --config vitest.rules.config.ts\""
+    "test:rules": "firebase emulators:exec --only firestore,storage --project memo-rules-test \"vitest run --config vitest.rules.config.ts\"",
+    "check:firebase": "tsx scripts/check-firebase.ts",
+    "emulators": "firebase emulators:start --only auth,firestore,storage --project demo-memo",
+    "dev:emulator": "node scripts/dev-emulator.mjs",
+    "emulator:seed": "node scripts/dev-emulator.mjs --seed"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",

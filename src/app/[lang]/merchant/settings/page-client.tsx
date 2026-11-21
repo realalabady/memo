@@ -122,13 +122,14 @@ export default function MerchantSettings() {
             )}
           </Panel>
 
-          {(contact.crNumber || contact.vatNumber || contact.email) && (
+          {(contact.crNumber || contact.freelanceNumber || contact.vatNumber || contact.email) && (
             <Panel title={t.businessDetails}>
               <dl className="grid gap-3 p-5 text-sm sm:grid-cols-3">
                 {(
                   [
                     [admin.contactEmail, contact.email],
                     [admin.crNo, contact.crNumber],
+                    [admin.freelanceNo, contact.freelanceNumber],
                     [admin.vatNo, contact.vatNumber],
                   ] as const
                 )

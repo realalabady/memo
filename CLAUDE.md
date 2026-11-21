@@ -15,6 +15,8 @@ Multi-store marketplace for Saudi Arabia: independent stores sell, shoppers pay 
 - Unit tests: `npm test` (Vitest, `src/**/*.test.ts`)
 - Rules + integration tests: `npm run test:rules` (Firestore/Storage emulators via firebase-tools; needs Java). Route handlers are tested in `tests/rules/*.int.test.ts`
 - Seed sample data: `npm run seed`
+- End-to-end against emulators: `npm run emulators`, `npm run emulator:seed`, `npm run dev:emulator` (port 3005, own `.next-emulator` dir, test accounts in `scripts/seed-emulator.ts`)
+- Server credentials without a key file: `FIREBASE_USE_ADC=true` (+ `GOOGLE_CLOUD_QUOTA_PROJECT` locally); check with `npm run check:firebase`
 
 ## Where things live
 - `src/app/(store)/` storefront · `src/app/merchant/`, `src/app/admin/` dashboards (server-gated by `components/dashboard/role-gate.tsx`)
@@ -43,6 +45,7 @@ Multi-store marketplace for Saudi Arabia: independent stores sell, shoppers pay 
 - Home page layout/copy lives in `settings/storefront` (`getStorefront`, edited at /admin/storefront); legal/policy pages in `pages/{slug}` (`src/lib/legal.ts` slugs + built-in text, rendered by `RichText`, never as raw HTML).
 - Categories, storefront, legal pages, product moderation and user roles are admin API routes (`/api/admin/*`) that write an `auditLogs` entry; clients never write them.
 - A product hidden by an admin (`hiddenByAdmin`) stays `draft` until an admin releases it; merchant edits keep it a draft.
+- Tabby/Tamara keys: read only via `getPaymentKeys()` (`src/lib/server/payment-config.ts`: `secrets/payments` set at /admin/payments, env fallback, 30 s cache). Never return secrets in full or put them in audit logs; provider API hosts are allow-listed.
 - Abuse-prone endpoints call `rateLimit(bucket, uid, n)` (`src/lib/server/rate-limit.ts`).
 - Public pages set `alternates(lang, path)` from `src/lib/seo.ts` in `generateMetadata`; add new public routes to `src/app/sitemap.ts`.
 - Demo mode = no Firebase keys (development only). `PAYMENTS_DEMO` is ignored in production and `src/instrumentation.ts` refuses to boot with it.

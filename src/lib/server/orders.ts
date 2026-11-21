@@ -15,6 +15,7 @@ import {
 } from "@/lib/types";
 import { round2 } from "@/lib/utils";
 import { HttpError } from "./auth";
+import { stockChanged } from "./merchant";
 import { captureTabbyPayment, getTabbyPayment, tabbyPaymentIsPaid } from "@/lib/payments/tabby";
 import { authoriseTamaraOrder, captureTamaraOrder, getTamaraOrder } from "@/lib/payments/tamara";
 
@@ -55,7 +56,7 @@ export async function createPendingOrder(input: {
   const settings = await getSettings();
   const orderRef = db.collection("orders").doc();
 
-  return db.runTransaction(async (tx) => {
+  const created = await db.runTransaction(async (tx) => {
     const snaps = await tx.getAll(...items.map((i) => db.collection("products").doc(i.productId)));
     const lines: OrderLine[] = snaps.map((s, idx) => {
       if (!s.exists) throw new HttpError(400, "A product in your bag no longer exists");
@@ -134,6 +135,8 @@ export async function createPendingOrder(input: {
     }
     return order;
   });
+  stockChanged();
+  return created;
 }
 
 export async function getOrder(id: string) {
@@ -158,13 +161,13 @@ export async function saveProviderRefs(orderId: string, refs: { checkoutId?: str
  */
 export async function markOrderPaid(orderId: string, providerPaymentId?: string) {
   const db = adminDb();
-  await db.runTransaction(async (tx) => {
+  const tookStock = await db.runTransaction(async (tx) => {
     const ref = db.collection("orders").doc(orderId);
     const snap = await tx.get(ref);
     if (!snap.exists) throw new Error(`Order ${orderId} not found`);
     const order = snap.data() as Order;
     // Refunded is final: a late webhook must never flip it back to paid.
-    if (order.paymentStatus === "captured" || order.paymentStatus === "refunded") return;
+    if (order.paymentStatus === "captured" || order.paymentStatus === "refunded") return false;
 
     const productSnaps = order.stockReserved
       ? []
@@ -191,18 +194,20 @@ export async function markOrderPaid(orderId: string, providerPaymentId?: string)
         paidAt: now,
       });
     }
+    return productSnaps.length > 0;
   });
+  if (tookStock) stockChanged();
 }
 
 /** Marks a not-yet-paid order failed/cancelled and releases its reserved stock (once). */
 export async function markOrderFailed(orderId: string, status: "failed" | "cancelled", reason?: string) {
   const db = adminDb();
-  await db.runTransaction(async (tx) => {
+  const released = await db.runTransaction(async (tx) => {
     const ref = db.collection("orders").doc(orderId);
     const snap = await tx.get(ref);
-    if (!snap.exists) return;
+    if (!snap.exists) return false;
     const order = snap.data() as Order;
-    if (order.paymentStatus === "captured" || order.paymentStatus === "refunded") return;
+    if (order.paymentStatus === "captured" || order.paymentStatus === "refunded") return false;
 
     const productSnaps = order.stockReserved
       ? await tx.getAll(...order.items.map((l) => db.collection("products").doc(l.productId)))
@@ -215,7 +220,9 @@ export async function markOrderFailed(orderId: string, status: "failed" | "cance
     for (const merchantId of order.merchantIds) {
       tx.update(db.collection("merchantOrders").doc(`${orderId}_${merchantId}`), { paymentStatus: status });
     }
+    return productSnaps.length > 0;
   });
+  if (released) stockChanged();
 }
 
 /**

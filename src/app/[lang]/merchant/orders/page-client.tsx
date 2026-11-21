@@ -17,7 +17,7 @@ import { useMerchantScope } from "@/lib/auth/merchant-scope";
 import { useMerchantOrders, useSettings } from "@/lib/data/hooks";
 import { setFulfillment } from "@/lib/data/mutations";
 import type { FulfillmentStatus, MerchantOrder } from "@/lib/types";
-import { cn, shortId } from "@/lib/utils";
+import { cn, shortId, pct } from "@/lib/utils";
 
 const filters = ["all", "pending", "shipped", "delivered"] as const;
 
@@ -26,6 +26,7 @@ function OrderDrawer({ order, readOnly, onClose }: { order: MerchantOrder; readO
   const t = useT().merchant;
   const { col } = useT().dash;
   const account = useT().account;
+  const checkoutT = useT().checkout;
   const status = useT().status;
   const { money, date, lang } = useFormat();
   const { data: settings } = useSettings();
@@ -55,7 +56,7 @@ function OrderDrawer({ order, readOnly, onClose }: { order: MerchantOrder; readO
 
   const lines: [string, string][] = [
     [col.sale, money(order.subtotal, { decimals: true })],
-    [`${col.commission} (${Math.round(order.commissionRate * 100)}%)`, `−${money(order.commission, { decimals: true })}`],
+    [`${col.commission} (${pct(order.commissionRate)})`, `−${money(order.commission, { decimals: true })}`],
     [col.bnplFee, `−${money(order.providerFee, { decimals: true })}`],
   ];
 
@@ -107,6 +108,11 @@ function OrderDrawer({ order, readOnly, onClose }: { order: MerchantOrder; readO
           <p className="text-[11px] font-medium text-muted">{account.shipTo}</p>
           <p className="mt-1">{order.customer.firstName} {order.customer.lastName}</p>
           <p className="text-muted">{order.customer.line1}, {order.customer.city}{order.customer.zip ? ` ${order.customer.zip}` : ""}</p>
+          {order.customer.nationalAddress && (
+            <p className="text-muted">
+              {checkoutT.nationalAddress}: <span dir="ltr">{order.customer.nationalAddress}</span>
+            </p>
+          )}
           <p className="text-muted" dir="ltr">{order.customer.phone}</p>
         </div>
 

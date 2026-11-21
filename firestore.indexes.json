@@ -41,6 +41,46 @@
           "order": "ASCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "merchantOrders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "paymentStatus",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "commission",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "providerFee",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "subtotal",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "merchantOrders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "paymentStatus",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "provider",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "subtotal",
+          "order": "ASCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": [

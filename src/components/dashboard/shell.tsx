@@ -68,7 +68,6 @@ function NavLinks({ nav, role, pathname, layoutId, onNavigate }: { nav: NavItem[
 function AccountBox() {
   const t = useT().dash;
   const { profile, signOut, demo } = useAuth();
-  const router = useRouter();
   return (
     <div className="space-y-2">
       {demo && <p className="rounded-2xl bg-white/5 px-3 py-2 text-[11px] text-paper/50">{t.demoBadge}</p>}
@@ -81,7 +80,7 @@ function AccountBox() {
           <p className="truncate text-[13px]">{profile?.displayName}</p>
           <p className="truncate text-[11px] text-paper/50">{profile?.email}</p>
         </div>
-        <button aria-label={t.signOut} onClick={() => signOut().then(() => router.push("/"))} className="text-paper/50 hover:text-paper">
+        <button aria-label={t.signOut} onClick={() => signOut()} className="text-paper/50 hover:text-paper">
           <SignOut weight="light" className="size-[18px] rtl:-scale-x-100" />
         </button>
       </div>

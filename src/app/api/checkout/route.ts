@@ -2,7 +2,8 @@ import { z } from "zod";
 import { adminDb, isAdminConfigured } from "@/lib/firebase/admin";
 import { demoProducts } from "@/lib/fixtures";
 import { providerAvailable } from "@/lib/money";
-import { shouldSimulate } from "@/lib/payments";
+import { providerConfigured, shouldSimulate } from "@/lib/payments";
+import { getSettings } from "@/lib/server/orders";
 import { createTabbySession } from "@/lib/payments/tabby";
 import { createTamaraCheckout } from "@/lib/payments/tamara";
 import { appUrl, errorResponse, HttpError, requireUser } from "@/lib/server/auth";
@@ -26,6 +27,12 @@ const schema = z.object({
     city: z.string().trim().min(2).max(60),
     line1: z.string().trim().min(3).max(200),
     zip: z.string().trim().max(10).optional(),
+    nationalAddress: z
+      .string()
+      .trim()
+      .toUpperCase()
+      .refine((v) => v === "" || /^[A-Z]{4}\d{4}$/.test(v), "Invalid national address")
+      .optional(),
   }),
 });
 
@@ -47,6 +54,15 @@ export async function POST(req: Request) {
 
     const user = await requireUser(req);
     await rateLimit("checkout", user.uid, 6);
+    // Admin › Payments can switch a provider off; without keys it can only run in the development simulator.
+    const settings = await getSettings();
+    const label = provider === "tabby" ? "Tabby" : "Tamara";
+    if ((provider === "tabby" ? settings.tabbyEnabled : settings.tamaraEnabled) === false) {
+      throw new HttpError(400, `${label} is turned off. Choose the other option.`);
+    }
+    if (!(await shouldSimulate(provider)) && !(await providerConfigured(provider))) {
+      throw new HttpError(503, `${label} isn't set up yet. Choose the other option.`);
+    }
     // An unverified address could be someone else's: order emails and BNPL contact details must be real.
     if (!user.decoded.email_verified) throw new HttpError(403, "Verify your email address before checking out");
     const order = await createPendingOrder({
@@ -62,7 +78,7 @@ export async function POST(req: Request) {
       throw new HttpError(400, `${provider === "tabby" ? "Tabby" : "Tamara"} isn't available for this amount`);
     }
 
-    if (shouldSimulate(provider)) {
+    if (await shouldSimulate(provider)) {
       return Response.json({
         url: `/checkout/demo?provider=${provider}&amount=${order.total}&order=${order.id}`,
       });

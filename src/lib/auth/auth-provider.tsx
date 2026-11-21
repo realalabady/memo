@@ -14,6 +14,7 @@ import {
 } from "firebase/auth";
 import { doc, onSnapshot } from "firebase/firestore";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { freshIdToken } from "@/lib/auth/id-token";
 import { auth, db, isFirebaseConfigured } from "@/lib/firebase/client";
 import { demoMerchants } from "@/lib/fixtures";
 import type { Merchant, Role, UserProfile } from "@/lib/types";
@@ -28,7 +29,8 @@ interface AuthState {
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (name: string, email: string, password: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
-  signOut: () => Promise<void>;
+  /** Signs out and loads `to` (default: the store home) as a fresh page. */
+  signOut: (to?: string) => Promise<void>;
   /** false only for a signed-in account whose email isn't confirmed yet (checkout requires it) */
   emailVerified: boolean;
   resendVerification: () => Promise<void>;
@@ -44,7 +46,7 @@ const DEMO_KEY = "memo-demo-role";
 
 /** Creates/syncs users/{uid} and custom claims; refreshes the ID token when claims changed. */
 async function bootstrap(user: User, displayName?: string) {
-  const token = await user.getIdToken();
+  const token = await freshIdToken(user);
   const res = await fetch("/api/auth/bootstrap", {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -57,8 +59,18 @@ async function bootstrap(user: User, displayName?: string) {
 
 /** Mints the httpOnly session cookie the server-gated dashboards check. */
 async function mintSession(user: User) {
-  const token = await user.getIdToken();
+  const token = await freshIdToken(user);
   await fetch("/api/auth/session", { method: "POST", headers: { Authorization: `Bearer ${token}` } });
+}
+
+/**
+ * After signing out, load the next page from scratch. A soft navigation races the dashboards' own
+ * "signed out → /login?next=…" guard (which usually won, stranding the user on the login page with a
+ * stale `next`), and the client router cache could still hold pages rendered for the old session.
+ * This runs before React re-renders with the signed-out state, so the guard never gets to redirect.
+ */
+function leaveTo(to: string) {
+  window.location.assign(safeNext(to) ?? "/");
 }
 
 /** Only allow same-origin relative redirects (blocks `//evil.com` and absolute URLs). */
@@ -162,11 +174,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signIn: async () => {},
         signUp: async () => {},
         signInWithGoogle: async () => {},
-        signOut: async () => {
+        signOut: async (to = "/") => {
           try {
             localStorage.removeItem(DEMO_KEY);
           } catch {}
-          setDemoRole(null);
+          leaveTo(to);
         },
         emailVerified: true,
         resendVerification: async () => {},
@@ -181,7 +193,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       merchant,
       loading,
       demo: false,
-      getToken: async () => (fbUser ? fbUser.getIdToken() : null),
+      getToken: async () => (fbUser ? freshIdToken(fbUser) : null),
       signIn: async (email, password) => {
         const cred = await signInWithEmailAndPassword(auth(), email, password);
         await bootstrap(cred.user);
@@ -196,9 +208,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const cred = await signInWithPopup(auth(), new GoogleAuthProvider());
         await bootstrap(cred.user);
       },
-      signOut: async () => {
+      signOut: async (to = "/") => {
         await fetch("/api/auth/session", { method: "DELETE" }).catch(() => {});
         await fbSignOut(auth());
+        leaveTo(to);
       },
       emailVerified: verified,
       resendVerification: async () => {

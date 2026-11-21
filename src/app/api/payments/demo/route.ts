@@ -16,7 +16,7 @@ export async function POST(req: Request) {
     const user = await requireUser(req);
     const order = await getOrder(orderId);
     if (!order || order.customerId !== user.uid) throw new HttpError(404, "Order not found");
-    if (order.provider === "demo" || !shouldSimulate(order.provider)) {
+    if (order.provider === "demo" || !(await shouldSimulate(order.provider))) {
       throw new HttpError(403, "Simulator disabled for this provider");
     }
     if (approve) await markOrderPaid(orderId, `sim_${Date.now()}`);

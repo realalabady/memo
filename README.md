@@ -42,13 +42,21 @@ npm run dev
 
 With no `.env.local`, the app runs in **demo mode**: the storefront uses sample data, and `/login` lets you enter as Admin, Merchant or Customer.
 
+**Full local test against Firebase emulators** (real Auth, Firestore and Storage rules, nothing touches your project; needs Java):
+
+```bash
+npm run emulators      # terminal 1, keep running
+npm run emulator:seed  # test accounts admin@ / store@ / shopper@memo.test, password memo-test-1234
+npm run dev:emulator   # http://localhost:3005
+```
+
 Checks: `npm run typecheck`, `npm run lint`, `npm test`, `npm run test:rules` (Firestore + Storage emulators, needs Java), `npm run build`.
 
 ## Go live: production checklist
 
 **Firebase**
 - [ ] Create a Firebase project. Enable **Email/Password** and **Google** sign-in, **Firestore** and **Storage**.
-- [ ] Fill `.env.local` (or your host's env settings) from `.env.example`: the six `NEXT_PUBLIC_FIREBASE_*` web keys and the `FIREBASE_*` service-account key.
+- [ ] Fill `.env.local` (or your host's env settings) from `.env.example`: the six `NEXT_PUBLIC_FIREBASE_*` web keys and the `FIREBASE_*` service-account key. If your Google Cloud organization blocks keys, set `FIREBASE_USE_ADC=true` instead: locally run `gcloud auth application-default login` and set `GOOGLE_CLOUD_QUOTA_PROJECT`; in production host on Cloud Run or Firebase App Hosting, which provide the credentials automatically. Check with `npm run check:firebase`.
 - [ ] Deploy rules and indexes: `npx firebase-tools deploy --only firestore:rules,firestore:indexes,storage`. Redeploy whenever `firestore.rules`, `storage.rules` or `firestore.indexes.json` change.
 - The TTL policy that deletes old rate-limit counters (`rateLimits.expireAt`) is part of `firestore.indexes.json`, so the deploy above sets it up.
 - [ ] Seed categories and settings: `npm run seed` (add `-- --samples` only on a staging project).
@@ -61,9 +69,11 @@ Checks: `npm run typecheck`, `npm run lint`, `npm test`, `npm run test:rules` (F
 - [ ] `PAYMENTS_DEMO` is **unset** (the server refuses to start in production if it is set).
 - [ ] `CRON_SECRET` set. On Vercel, `vercel.json` runs `/api/cron/expire-orders` every 15 minutes; elsewhere call it with `Authorization: Bearer $CRON_SECRET`.
 
+**Payments (Admin › Payments)** — paste the keys there; they are stored server-side only (Firestore `secrets/payments`, closed to all clients), shown masked, and saving needs a sign-in from the last 10 minutes. The environment variables below still work as a fallback.
+
 **Tabby**
 - [ ] `TABBY_SECRET_KEY`, `TABBY_MERCHANT_CODE`, `TABBY_API_URL`.
-- [ ] `TABBY_WEBHOOK_SECRET`, then register the webhook: `npx tsx --env-file=.env.local scripts/register-tabby-webhook.ts` (points to `{APP_URL}/api/webhooks/tabby`).
+- [ ] Webhook: click **Register webhook with Tabby** in Admin › Payments (needs the public https address). The script `scripts/register-tabby-webhook.ts` does the same from env vars.
 
 **Tamara**
 - [ ] `TAMARA_API_TOKEN`, `TAMARA_API_URL` (`https://api.tamara.co` in production), `TAMARA_NOTIFICATION_TOKEN`. The notification URL is sent with every checkout.

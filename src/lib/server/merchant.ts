@@ -20,11 +20,26 @@ export function revalidateCatalog() {
   revalidateTag("catalog", { expire: 0 });
 }
 
+/**
+ * Stock moved (checkout reservation, failed/expired payment, refund): product pages and the bag
+ * re-check read the cached catalog, so refresh it. Outside a Next request (scripts, tests) there is
+ * no cache to refresh, so that case is skipped.
+ */
+export function stockChanged() {
+  try {
+    revalidateCatalog();
+  } catch (err) {
+    if (!(err instanceof Error && /static generation store|outside a request|Invariant/i.test(err.message))) throw err;
+  }
+}
+
 /** Append-only trail of privileged changes (admin actions, bank detail edits). */
 export async function audit(actorUid: string, action: string, target: string, data: Record<string, unknown> = {}) {
+  // Firestore rejects undefined values; optional fields left out of a change simply drop from the entry.
+  const clean = JSON.parse(JSON.stringify(data)) as Record<string, unknown>;
   await adminDb()
     .collection("auditLogs")
-    .add({ actorUid, action, target, data, createdAt: Date.now(), at: FieldValue.serverTimestamp() });
+    .add({ actorUid, action, target, data: clean, createdAt: Date.now(), at: FieldValue.serverTimestamp() });
 }
 
 /** Firestore batches hold 500 writes; chunk large fan-out updates. */

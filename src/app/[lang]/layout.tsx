@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, IBM_Plex_Sans_Arabic, Instrument_Serif, Noto_Naskh_Arabic } from "next/font/google";
+import { Geist, Geist_Mono, Instrument_Serif, Noto_Naskh_Arabic, Readex_Pro } from "next/font/google";
 import { notFound } from "next/navigation";
 import { Toaster } from "sonner";
 import { dirOf, isLocale, locales } from "@/i18n/config";
@@ -18,11 +18,9 @@ const instrument = Instrument_Serif({
   style: ["normal", "italic"],
 });
 // Arabic glyphs fall through to these (Latin keeps Geist / Instrument Serif).
-const plexArabic = IBM_Plex_Sans_Arabic({
-  variable: "--font-arabic",
-  subsets: ["arabic"],
-  weight: ["300", "400", "500", "600"],
-});
+// Readex Pro: wide, open letterforms that stay legible at small body sizes (variable weight).
+// globals.css names it first in --font-sans (see the note there).
+const readexArabic = Readex_Pro({ variable: "--font-arabic", subsets: ["arabic"] });
 const naskh = Noto_Naskh_Arabic({ variable: "--font-arabic-display", subsets: ["arabic"], weight: ["400", "500"] });
 
 export function generateStaticParams() {
@@ -59,7 +57,7 @@ export default async function RootLayout({ children, params }: LayoutProps<"/[la
     <html
       lang={lang}
       dir={dirOf(lang)}
-      className={`${geist.variable} ${geistMono.variable} ${instrument.variable} ${plexArabic.variable} ${naskh.variable} h-full antialiased`}
+      className={`${geist.variable} ${geistMono.variable} ${instrument.variable} ${readexArabic.variable} ${naskh.variable} h-full antialiased`}
     >
       <body className="grain min-h-full flex flex-col">
         <I18nProvider lang={lang} dict={dict}>

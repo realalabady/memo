@@ -219,11 +219,15 @@ export default function AdminMerchantDetail() {
             rows={[
               [t.contactEmail, <span key="e" dir="ltr">{contact.email || merchant.email}</span>],
               [t.contactPhone, <span key="p" dir="ltr">{contact.phone || merchant.phone}</span>],
-              [t.crNo, <span key="c" dir="ltr" className="font-mono">{contact.crNumber}</span>],
+              contact.businessType === "none"
+                ? [t.crNo, t.noLicense]
+                : contact.businessType === "freelance"
+                  ? [t.freelanceNo, <span key="f" dir="ltr" className="font-mono">{contact.freelanceNumber}</span>]
+                  : [t.crNo, <span key="c" dir="ltr" className="font-mono">{contact.crNumber}</span>],
               [t.vatNo, <span key="v" dir="ltr" className="font-mono">{contact.vatNumber}</span>],
             ]}
           />
-          {!contact.email && !contact.crNumber && !merchant.email && <p className="px-5 pb-5 text-[13px] text-muted">{t.noContact}</p>}
+          {!contact.email && !contact.crNumber && !contact.freelanceNumber && !merchant.email && <p className="px-5 pb-5 text-[13px] text-muted">{t.noContact}</p>}
         </Panel>
         <Panel title={t.bankPanel}>
           {bank.iban ? (

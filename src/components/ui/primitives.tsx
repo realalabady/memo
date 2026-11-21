@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { ComponentProps, ReactNode } from "react";
+import { useId, type ComponentProps, type ReactNode } from "react";
 import { ArrowUpRight } from "@phosphor-icons/react/dist/ssr";
 import { cn } from "@/lib/utils";
 
@@ -124,31 +124,95 @@ export function ButtonLink({
 export function Field({
   label,
   className,
+  error,
   ...rest
-}: ComponentProps<"input"> & { label: string }) {
+}: ComponentProps<"input"> & { label: string; /** Inline message; tints the field ember. */ error?: string }) {
+  const errorId = useId();
   return (
     <label className={cn("block", className)}>
-      <span className="mb-1.5 block text-[11px] font-medium uppercase tracking-[0.14em] text-muted">{label}</span>
-      <span className="block rounded-2xl bg-ink/[0.03] p-1 ring-1 ring-ink/[0.06] transition focus-within:ring-ink/25">
+      <span className={cn("mb-1.5 block text-[11px] font-medium uppercase tracking-[0.14em] transition-colors", error ? "text-ember" : "text-muted")}>
+        {label}
+      </span>
+      <span
+        className={cn(
+          "block rounded-2xl p-1 ring-1 transition",
+          error ? "bg-ember-soft/40 ring-ember/50 focus-within:ring-ember" : "bg-ink/[0.03] ring-ink/[0.06] focus-within:ring-ink/25",
+        )}
+      >
         <input
           className="h-11 w-full rounded-[0.8rem] bg-paper px-4 text-[15px] outline-none shadow-[var(--shadow-inset)] placeholder:text-muted/60"
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? errorId : undefined}
           {...rest}
         />
       </span>
+      {error && (
+        <span
+          id={errorId}
+          role="alert"
+          className="flex items-center gap-1.5 pt-1.5 text-xs text-ember transition duration-200 ease-out-expo starting:-translate-y-1 starting:opacity-0"
+        >
+          <AlertIcon />
+          {error}
+        </span>
+      )}
     </label>
   );
 }
 
-export function TextArea({ label, className, ...rest }: ComponentProps<"textarea"> & { label: string }) {
+function AlertIcon() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden className="size-3.5 shrink-0 fill-current">
+      <path d="M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13Zm0 3a.75.75 0 0 1 .75.75v3a.75.75 0 0 1-1.5 0v-3A.75.75 0 0 1 8 4.5Zm0 6.25a.9.9 0 1 1 0-1.8.9.9 0 0 1 0 1.8Z" />
+    </svg>
+  );
+}
+
+/** Inline message under a control that isn't a <Field> (checkbox, button group). */
+export function FieldError({ children }: { children?: ReactNode }) {
+  if (!children) return null;
+  return (
+    <span role="alert" className="flex items-center gap-1.5 pt-1.5 text-xs text-ember transition duration-200 ease-out-expo starting:-translate-y-1 starting:opacity-0">
+      <AlertIcon />
+      {children}
+    </span>
+  );
+}
+
+/** A message about the whole form (the server refused it), shown in place of a toast. */
+export function FormError({ children, action }: { children?: ReactNode; action?: ReactNode }) {
+  if (!children) return null;
+  return (
+    <div
+      role="alert"
+      className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-ember-soft/60 px-4 py-3 text-sm text-ember ring-1 ring-ember/30 transition duration-200 ease-out-expo starting:-translate-y-1 starting:opacity-0"
+    >
+      <span className="flex items-start gap-2">
+        <span className="pt-0.5"><AlertIcon /></span>
+        {children}
+      </span>
+      {action}
+    </div>
+  );
+}
+
+export function TextArea({ label, className, error, ...rest }: ComponentProps<"textarea"> & { label: string; error?: string }) {
   return (
     <label className={cn("block", className)}>
-      <span className="mb-1.5 block text-[11px] font-medium uppercase tracking-[0.14em] text-muted">{label}</span>
-      <span className="block rounded-2xl bg-ink/[0.03] p-1 ring-1 ring-ink/[0.06] transition focus-within:ring-ink/25">
+      <span className={cn("mb-1.5 block text-[11px] font-medium uppercase tracking-[0.14em] transition-colors", error ? "text-ember" : "text-muted")}>{label}</span>
+      <span
+        className={cn(
+          "block rounded-2xl p-1 ring-1 transition",
+          error ? "bg-ember-soft/40 ring-ember/50 focus-within:ring-ember" : "bg-ink/[0.03] ring-ink/[0.06] focus-within:ring-ink/25",
+        )}
+      >
         <textarea
           className="min-h-28 w-full rounded-[0.8rem] bg-paper px-4 py-3 text-[15px] outline-none shadow-[var(--shadow-inset)] placeholder:text-muted/60"
+          aria-invalid={error ? true : undefined}
           {...rest}
         />
       </span>
+      <FieldError>{error}</FieldError>
     </label>
   );
 }

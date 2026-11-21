@@ -99,7 +99,7 @@ export function Reviews({ productId, reviews, avg, count }: { productId: string;
           <p className="flex items-center gap-3 text-sm text-muted">
             <StarRow value={avg ?? 0} />
             <span className="tabular-nums text-ink">{(avg ?? 0).toFixed(1)}</span>
-            <span>{fmt(t.count, { n: count })}</span>
+            <span>{count === 1 ? t.countOne : fmt(t.count, { n: count })}</span>
           </p>
         ) : null}
       </div>

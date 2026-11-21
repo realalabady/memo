@@ -2,17 +2,19 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { toast } from "sonner";
-import { Crown, Storefront, User } from "@phosphor-icons/react";
+import { ArrowLeft, Crown, Storefront, User } from "@phosphor-icons/react";
 import { Logo } from "@/components/brand/logo";
-import { Bezel, Button, Field } from "@/components/ui/primitives";
+import { Bezel, Button, Field, FormError } from "@/components/ui/primitives";
 import { Reveal } from "@/components/ui/motion";
 import { useT } from "@/i18n/client";
 import { safeNext, useAuth } from "@/lib/auth/auth-provider";
-import type { Role } from "@/lib/types";
+import { FORM, authError, useFormErrors } from "@/lib/form-errors";
+import { landing } from "@/lib/auth/landing";
 
-const home: Record<Role, string> = { admin: "/admin", merchant: "/merchant", customer: "/account" };
+/** Dashboards are gated on the server by the session cookie: open them as a fresh page. */
+const serverGated = (path: string) => /^\/(admin|merchant)(\/|$|\?)/.test(path);
 
 export function AuthForm({ mode }: { mode: "login" | "signup" }) {
   const t = useT().auth;
@@ -21,23 +23,37 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
   const router = useRouter();
   const next = safeNext(useSearchParams().get("next"));
   const [busy, setBusy] = useState(false);
+  const form = useFormErrors();
+  /** Set by a sign-in on this page (not when an already signed-in visitor lands here). */
+  const signedInHere = useRef(false);
 
   useEffect(() => {
-    if (profile) router.replace(next ?? home[profile.role]);
+    if (!profile) return;
+    const to = landing(profile.role, next);
+    // A soft navigation could reuse a router-cache entry from before sign-in that redirects back
+    // here, leaving the button spinning. Only after an explicit sign-in, so a failed session can't loop.
+    if (signedInHere.current && serverGated(to)) window.location.assign(to);
+    else router.replace(to);
   }, [profile, next, router]);
 
   async function run(fn: () => Promise<void>) {
     setBusy(true);
+    form.reset();
+    // Before awaiting: the profile (and the redirect effect) can arrive before fn() resolves.
+    signedInHere.current = true;
     try {
       await fn();
     } catch (err) {
-      toast.error((err as Error).message.replace("Firebase: ", ""));
+      signedInHere.current = false;
+      const e = authError(err, t);
+      if (e) form.setError(e.field, e.message);
       setBusy(false);
     }
   }
 
   function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (!form.validate(e.currentTarget)) return;
     const f = new FormData(e.currentTarget);
     const email = String(f.get("email"));
     const password = String(f.get("password"));
@@ -47,9 +63,14 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
   return (
     <div className="flex min-h-[100dvh] items-center justify-center px-4 py-16">
       <Reveal className="w-full max-w-md">
-        <Link href="/" className="mb-10 flex justify-center">
-          <Logo />
-        </Link>
+        <div className="mb-10 flex items-center justify-between">
+          <Link href="/" className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm text-ink/60 ring-1 ring-ink/10 transition hover:bg-cream hover:text-ink">
+            <ArrowLeft weight="light" className="size-4 rtl:-scale-x-100" /> {t.backToStore}
+          </Link>
+          <Link href="/" aria-label={t.backToStore}>
+            <Logo />
+          </Link>
+        </div>
         <Bezel innerClassName="p-8">
           <h1 className="font-display text-5xl leading-none">
             {mode === "login" ? (
@@ -90,16 +111,17 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
             </div>
           ) : (
             <>
-              <form onSubmit={submit} className="mt-8 space-y-4">
-                {mode === "signup" && <Field label={t.fullName} name="name" required autoComplete="name" />}
-                <Field label={t.email} name="email" type="email" dir="ltr" required autoComplete="email" />
-                <Field label={t.password} name="password" type="password" dir="ltr" required minLength={8} autoComplete={mode === "login" ? "current-password" : "new-password"} />
+              <form onSubmit={submit} onInput={form.clear} noValidate className="mt-8 space-y-4">
+                <FormError>{form.errors[FORM]}</FormError>
+                {mode === "signup" && <Field label={t.fullName} name="name" required autoComplete="name" error={form.errors.name} />}
+                <Field label={t.email} name="email" type="email" dir="ltr" required autoComplete="email" error={form.errors.email} />
+                <Field label={t.password} name="password" type="password" dir="ltr" required minLength={8} autoComplete={mode === "login" ? "current-password" : "new-password"} error={form.errors.password} />
                 {mode === "login" && (
                   <button
                     type="button"
                     onClick={(e) => {
                       const email = String(new FormData(e.currentTarget.form!).get("email") ?? "").trim();
-                      if (!email) return toast.error(t.enterEmailFirst);
+                      if (!email) return form.setError("email", t.enterEmailFirst);
                       resetPassword(email).then(() => toast(t.resetSent));
                     }}
                     className="block text-xs text-muted underline-offset-4 hover:text-ink hover:underline"

@@ -15,7 +15,10 @@
   --color-tabby: #3eedbf;
   --color-tamara: #f2a07b;
 
-  --font-sans: var(--font-geist), var(--font-arabic), system-ui, sans-serif;
+  /* Arabic first, by family name: next/font's metric fallback faces are local Arial, which has both
+     scripts — after Geist it swallows Arabic, and var(--font-arabic)'s fallback would swallow Latin.
+     "Readex Pro" only covers the Arabic unicode-range, so Latin falls through to Geist. */
+  --font-sans: "Readex Pro", var(--font-geist), var(--font-arabic), system-ui, sans-serif;
   --font-mono: var(--font-geist-mono);
   --font-display: var(--font-instrument), var(--font-arabic-display), serif;
 

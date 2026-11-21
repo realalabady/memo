@@ -26,16 +26,28 @@ export const merchantProfileInput = z.object({
   bannerUrl: z.url().optional(),
 });
 
+/** Saudi CR unified number, and freelance document (وثيقة العمل الحر) number. */
+export const CR_NUMBER = /^7\d{9}$/;
+export const FREELANCE_NUMBER = /^FL-?\d{6,12}$/;
+
 export const merchantApplyInput = z.object({
   storeName: z.string().trim().min(2).max(60),
   tagline: z.string().trim().max(120).optional(),
   bio: z.string().trim().max(2000).optional(),
   city: z.string().trim().min(2).max(60),
   phone: z.string().trim().min(8).max(20),
-  /** Saudi commercial registration: 10 digits */
-  crNumber: z.string().trim().regex(/^\d{10}$/, "Commercial registration number must be 10 digits"),
+  businessType: z.enum(["cr", "freelance", "none"]).default("cr"),
+  /** Saudi commercial registration (unified number): 10 digits starting with 7 */
+  crNumber: z.string().trim().default(""),
+  /** Freelance document (وثيقة العمل الحر): FL- then digits */
+  freelanceNumber: z.string().trim().toUpperCase().default(""),
   vatNumber: z.string().trim().regex(/^(\d{15})?$/, "VAT number must be 15 digits").default(""),
   acceptTerms: z.literal(true, "Please accept the merchant terms"),
+}).superRefine((d, ctx) => {
+  if (d.businessType === "cr" && !CR_NUMBER.test(d.crNumber))
+    ctx.addIssue({ code: "custom", path: ["crNumber"], message: "Commercial registration number must be 10 digits starting with 7" });
+  if (d.businessType === "freelance" && !FREELANCE_NUMBER.test(d.freelanceNumber))
+    ctx.addIssue({ code: "custom", path: ["freelanceNumber"], message: "Freelance document number must look like FL-123456789" });
 });
 
 export const bankInput = z.object({

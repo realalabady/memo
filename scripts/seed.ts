@@ -2,10 +2,10 @@
  * Seeds a Firebase project.
  *   npm run seed              → categories + platform settings (safe for production)
  *   npm run seed -- --samples → also the sample stores and products (for a staging/demo project)
- * Reads FIREBASE_* admin credentials from .env.local. Never overwrites existing settings.
+ * Reads FIREBASE_* admin credentials from .env.local (or Application Default Credentials). Never overwrites existing settings.
  * Sample stores have no owner account; sign-ins for real stores come from /sell applications.
  */
-import { cert, initializeApp } from "firebase-admin/app";
+import { applicationDefault, cert, initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import { demoCategories, demoMerchants, demoProducts } from "../src/lib/fixtures";
 import { DEFAULT_SETTINGS } from "../src/lib/types";
@@ -14,12 +14,13 @@ process.loadEnvFile?.(".env.local");
 
 const samples = process.argv.includes("--samples");
 
+const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n");
+// A service-account key if there is one, otherwise Application Default Credentials (FIREBASE_USE_ADC=true).
 const app = initializeApp({
-  credential: cert({
-    projectId: process.env.FIREBASE_PROJECT_ID,
-    clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-    privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
-  }),
+  projectId: process.env.FIREBASE_PROJECT_ID,
+  credential: privateKey
+    ? cert({ projectId: process.env.FIREBASE_PROJECT_ID, clientEmail: process.env.FIREBASE_CLIENT_EMAIL, privateKey })
+    : applicationDefault(),
 });
 const db = getFirestore(app);
 

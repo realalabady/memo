@@ -4,8 +4,21 @@
     {
       "name": "memo-dev",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
       "port": 3000
+    },
+    {
+      "name": "memo-emulator",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev:emulator"
+      ],
+      "port": 3005,
+      "autoPort": false
     }
   ]
 }

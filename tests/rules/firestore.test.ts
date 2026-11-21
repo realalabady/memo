@@ -129,6 +129,11 @@ describe("settings, categories, audit", () => {
     await assertFails(getDoc(doc(as("alice"), "rateLimits/checkout_alice")));
     await assertFails(setDoc(doc(as("alice"), "rateLimits/checkout_alice"), { count: 0 }));
   });
+  it("payment keys are closed to every client, admins included", async () => {
+    await assertFails(getDoc(doc(as("admin"), "secrets/payments")));
+    await assertFails(setDoc(doc(as("admin"), "secrets/payments"), { tabby: { secretKey: "sk_x" } }));
+    await assertFails(getDoc(doc(anon(), "secrets/payments")));
+  });
   it("admins can list every product, including drafts", async () => {
     await assertSucceeds(getDocs(collection(as("admin"), "products")));
     await assertFails(getDocs(collection(anon(), "products")));
@@ -158,6 +163,8 @@ describe("wishlist and addresses (owner only)", () => {
   });
   it("shoppers manage their own addresses with known fields only", async () => {
     await assertSucceeds(setDoc(doc(as("alice"), "users/alice/addresses/a1"), address));
+    await assertSucceeds(setDoc(doc(as("alice"), "users/alice/addresses/a4"), { ...address, nationalAddress: "RRRD2929" }));
+    await assertFails(setDoc(doc(as("alice"), "users/alice/addresses/a5"), { ...address, nationalAddress: "rrrd29" }));
     await assertFails(setDoc(doc(as("alice"), "users/alice/addresses/a2"), { ...address, role: "admin" }));
     await assertFails(setDoc(doc(as("bob"), "users/alice/addresses/a3"), address));
     await assertFails(getDoc(doc(as("bob"), "users/alice/addresses/a1")));

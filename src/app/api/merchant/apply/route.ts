@@ -19,14 +19,23 @@ export async function POST(req: Request) {
     if (!user.decoded.email_verified) throw new HttpError(403, "Verify your email address before applying");
     const parsed = merchantApplyInput.safeParse(await req.json());
     if (!parsed.success) throw new HttpError(400, parsed.error.issues[0]?.message ?? "Please complete the form");
-    const { phone, crNumber, vatNumber, acceptTerms: _accepted, ...store } = parsed.data;
+    const { phone, businessType, crNumber, freelanceNumber, vatNumber, acceptTerms: _accepted, ...store } = parsed.data;
     void _accepted;
 
     const db = adminDb();
     const base = slugify(store.storeName) || "store";
     const merchantRef = db.collection("merchants").doc(user.uid);
     const now = Date.now();
-    const contact: MerchantContact = { email: user.email, phone, crNumber, ...(vatNumber ? { vatNumber } : {}), updatedAt: now };
+    // Only the number that matches the chosen business type is kept; "none" stores neither (nor VAT).
+    const contact: MerchantContact = {
+      email: user.email,
+      phone,
+      businessType,
+      ...(businessType === "cr" ? { crNumber } : {}),
+      ...(businessType === "freelance" ? { freelanceNumber: `FL-${freelanceNumber.replace(/^FL-?/, "")}` } : {}),
+      ...(businessType !== "none" && vatNumber ? { vatNumber } : {}),
+      updatedAt: now,
+    };
     const terms = { termsAcceptedAt: now, termsVersion: MERCHANT_TERMS_VERSION };
 
     const slug = await db.runTransaction(async (tx) => {

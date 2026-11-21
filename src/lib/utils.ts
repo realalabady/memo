@@ -48,3 +48,8 @@ export function formatDate(ms: number, withTime = false, lang: Locale = "en") {
 export function shortId(id: string) {
   return id.slice(0, 8).toUpperCase();
 }
+
+/** 0.085 → "8.5%", 0.1 → "10%" (rates are stored as fractions; never round 8.5 to 9). */
+export function pct(rate: number) {
+  return `${+(rate * 100).toFixed(2)}%`;
+}

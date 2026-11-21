@@ -52,6 +52,8 @@ export async function getProduct(id: string): Promise<Product | null> {
   cacheLife("minutes");
   cacheTag("catalog");
   if (!isAdminConfigured) return demoProducts.find((p) => p.id === id) ?? null;
+  // Firestore rejects ids with "/" and reserved ids like "__x__" (also the empty-catalog build placeholder): not found, not a 500.
+  if (!id || id.length > 200 || id.includes("/") || /^__.*__$/.test(id)) return null;
   const doc = await adminDb().collection("products").doc(id).get();
   if (!doc.exists) return null;
   const product = { id: doc.id, ...doc.data() } as Product;

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { matchesTx, txCsvLine } from "./csv";
 import { DEFAULT_LEGAL, LEGAL_SLUGS, parseBlocks, withLegalDefaults } from "./legal";
 import { alternates, clip, jsonLd } from "./seo";
+import { pct } from "./utils";
 import type { MerchantOrder } from "./types";
 
 describe("legal page text format", () => {
@@ -73,5 +74,13 @@ describe("transactions CSV", () => {
     expect(matchesTx(row, { q: "مصباح" })).toBe(true);
     expect(matchesTx(row, { provider: "tamara" })).toBe(false);
     expect(matchesTx(row, { payout: "paid" })).toBe(false);
+  });
+});
+
+describe("pct", () => {
+  it("keeps fractional commission rates", () => {
+    expect(pct(0.085)).toBe("8.5%");
+    expect(pct(0.1)).toBe("10%");
+    expect(pct(0.0499)).toBe("4.99%");
   });
 });

@@ -1,4 +1,5 @@
 import "server-only";
+import { getPaymentKeys } from "@/lib/server/payment-config";
 import { jwtVerify } from "jose";
 import type { Order } from "@/lib/types";
 import { normalizeSaPhone } from "./tabby";
@@ -8,15 +9,15 @@ import { normalizeSaPhone } from "./tabby";
  * so funds settle into the marketplace owner's Tamara account.
  * Docs: https://docs.tamara.co
  */
-const API = () => (process.env.TAMARA_API_URL ?? "https://api-sandbox.tamara.co").replace(/\/$/, "");
 
-export const tamaraConfigured = () => Boolean(process.env.TAMARA_API_TOKEN);
+export { tamaraConfigured } from "@/lib/server/payment-config";
 
 async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const res = await fetch(`${API()}${path}`, {
+  const { apiUrl, apiToken } = (await getPaymentKeys()).tamara;
+  const res = await fetch(`${apiUrl}${path}`, {
     ...init,
     headers: {
-      Authorization: `Bearer ${process.env.TAMARA_API_TOKEN}`,
+      Authorization: `Bearer ${apiToken}`,
       "Content-Type": "application/json",
       ...init.headers,
     },
@@ -124,7 +125,7 @@ export const cancelTamaraOrder = (id: string, amount: number) =>
 
 /** Tamara signs webhooks with a HS256 JWT (`tamaraToken` query or Bearer header). */
 export async function verifyTamaraWebhook(req: Request) {
-  const secret = process.env.TAMARA_NOTIFICATION_TOKEN;
+  const secret = (await getPaymentKeys()).tamara.notificationToken;
   if (!secret) return false;
   const url = new URL(req.url);
   const header = req.headers.get("authorization") ?? "";

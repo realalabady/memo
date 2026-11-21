@@ -2,15 +2,16 @@ import { timingSafeEqual } from "node:crypto";
 import { getTabbyPayment, tabbyRefundedTotal } from "@/lib/payments/tabby";
 import { getOrder, markOrderFailed, settleTabby } from "@/lib/server/orders";
 import { handleOnce } from "@/lib/server/payment-events";
+import { getPaymentKeys } from "@/lib/server/payment-config";
 import { applyRefund, flagForReview, refundInProgress } from "@/lib/server/refunds";
 
 /**
  * Register in Tabby with: url = {APP_URL}/api/webhooks/tabby,
- * header { title: "X-Webhook-Secret", value: TABBY_WEBHOOK_SECRET } — see scripts/register-tabby-webhook.ts.
+ * header { title: "X-Webhook-Secret", value: <webhook secret> } — Admin › Payments registers it in one click.
  * The body is only a hint: every decision re-reads the payment from Tabby's API.
  */
-function authorized(req: Request) {
-  const expected = process.env.TABBY_WEBHOOK_SECRET;
+async function authorized(req: Request) {
+  const expected = (await getPaymentKeys()).tabby.webhookSecret;
   const got = req.headers.get("x-webhook-secret");
   if (!expected || !got) return false;
   const a = Buffer.from(expected);
@@ -35,7 +36,7 @@ async function syncRefunds(orderId: string, paymentId: string) {
 }
 
 export async function POST(req: Request) {
-  if (!authorized(req)) return new Response("unauthorized", { status: 401 });
+  if (!(await authorized(req))) return new Response("unauthorized", { status: 401 });
   const event = (await req.json().catch(() => null)) as {
     id?: string;
     status?: string;

@@ -1,11 +1,13 @@
 "use client";
 
+import { freshIdToken } from "@/lib/auth/id-token";
 import { addDoc, collection, deleteDoc, doc, updateDoc } from "firebase/firestore";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { auth, db, isFirebaseConfigured, storage } from "@/lib/firebase/client";
 import type { LegalPage, LegalSlug } from "@/lib/legal";
 import type {
   Address,
+  BusinessType,
   Category,
   FulfillmentStatus,
   Merchant,
@@ -33,7 +35,8 @@ function guard() {
 
 async function api(url: string, method: string, body?: unknown) {
   guard();
-  const token = await auth().currentUser?.getIdToken();
+  const user = auth().currentUser;
+  const token = user ? await freshIdToken(user) : null;
   if (!token) throw new Error("Please sign in again");
   const res = await fetch(url, {
     method,
@@ -91,7 +94,7 @@ export async function setFulfillment(merchantOrderId: string, status: Fulfillmen
 /** The slug is generated (and reserved) by the server; any slug passed here is ignored. */
 export async function applyAsMerchant(
   _uid: string,
-  data: { storeName: string; tagline?: string; bio?: string; city: string; phone: string; crNumber: string; vatNumber?: string; acceptTerms: boolean },
+  data: { storeName: string; tagline?: string; bio?: string; city: string; phone: string; businessType: BusinessType; crNumber?: string; freelanceNumber?: string; vatNumber?: string; acceptTerms: boolean },
 ) {
   await api("/api/merchant/apply", "POST", data);
 }
@@ -184,7 +187,8 @@ export async function deleteAddress(uid: string, id: string) {
 /** Authenticated GET for admin JSON/CSV endpoints. */
 export async function adminGet(url: string) {
   guard();
-  const token = await auth().currentUser?.getIdToken();
+  const user = auth().currentUser;
+  const token = user ? await freshIdToken(user) : null;
   if (!token) throw new Error("Please sign in again");
   const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
   if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as { error?: string }).error ?? "Something went wrong");
@@ -198,4 +202,31 @@ export async function saveLegalPage(slug: LegalSlug, page: Pick<LegalPage, "titl
 
 export async function resetLegalPage(slug: LegalSlug) {
   await api(`/api/admin/pages/${slug}`, "DELETE");
+}
+
+export interface PaymentSetup {
+  tabby: { secretKey: string; merchantCode: string; apiUrl: string; webhookSecret: string; testMode: boolean; configured: boolean; enabled: boolean; webhookUrl: string };
+  tamara: { apiToken: string; apiUrl: string; notificationToken: string; testMode: boolean; configured: boolean; enabled: boolean; webhookUrl: string };
+  sources: Record<"tabby" | "tamara", Record<string, "dashboard" | "env" | "none">> & { updatedAt: number };
+  publicHttps: boolean;
+  simulator: boolean;
+}
+
+/** Admin › Payments: masked view of the keys (secrets never come back in full). */
+export async function getPaymentSetup() {
+  return (await (await adminGet("/api/admin/payments")).json()) as PaymentSetup;
+}
+
+export async function savePaymentSetup(body: {
+  tabby?: Record<string, string>;
+  tamara?: Record<string, string>;
+  clear?: string[];
+  tabbyEnabled?: boolean;
+  tamaraEnabled?: boolean;
+}) {
+  await api("/api/admin/payments", "PUT", body);
+}
+
+export async function checkPaymentProvider(provider: "tabby" | "tamara", action: "test" | "register-webhook" = "test") {
+  return (await api("/api/admin/payments/test", "POST", { provider, action })) as { ok: boolean; message: string; webhookRegistered?: boolean };
 }

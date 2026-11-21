@@ -6,7 +6,7 @@ import { refundTamaraOrder } from "@/lib/payments/tamara";
 import type { LedgerAdjustment, MerchantOrder, Order } from "@/lib/types";
 import { round2 } from "@/lib/utils";
 import { HttpError } from "./auth";
-import { audit } from "./merchant";
+import { audit, stockChanged } from "./merchant";
 
 /**
  * Refunds are per store: each merchantOrders row (one store's part of an order) is refunded in full.
@@ -111,7 +111,7 @@ export async function applyRefund(input: { orderId: string; merchantOrderIds?: s
   const db = adminDb();
   const orderRef = db.collection("orders").doc(input.orderId);
 
-  return db.runTransaction(async (tx) => {
+  const result = await db.runTransaction(async (tx) => {
     const snap = await tx.get(orderRef);
     if (!snap.exists) return { refunded: 0 };
     const order = { id: snap.id, ...snap.data() } as Order;
@@ -170,6 +170,8 @@ export async function applyRefund(input: { orderId: string; merchantOrderIds?: s
     });
     return { refunded: targets.length, amount: round2(amount) };
   });
+  if (result.refunded) stockChanged();
+  return result;
 }
 
 /**

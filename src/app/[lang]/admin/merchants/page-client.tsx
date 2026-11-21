@@ -1,5 +1,6 @@
 "use client";
 
+import { pct } from "@/lib/utils";
 import Link from "next/link";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/dashboard/shell";
@@ -53,7 +54,7 @@ export default function AdminMerchants() {
                     <span className="tabular-nums text-muted">
                       {m.commissionRate === undefined || m.commissionRate === null
                         ? fmt(t.defaultCommission, { n: Math.round(settings.commissionRate * 100) })
-                        : `${Math.round(m.commissionRate * 1000) / 10}%`}
+                        : pct(m.commissionRate)}
                     </span>
                   </td>
                   <td className="whitespace-nowrap text-end">

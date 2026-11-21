@@ -51,6 +51,7 @@ function demoOrder(id: string): OrderView | null {
 function OrderDetail() {
   const t = useT().account;
   const invoiceT = useT().invoice;
+  const checkoutT = useT().checkout;
   const { money, date, lang } = useFormat();
   const { id } = useParams<{ id: string }>();
   const { user, demo, loading } = useAuth();
@@ -142,6 +143,11 @@ function OrderDetail() {
           <p className="text-[11px] font-medium text-muted">{t.shipTo}</p>
           <p className="mt-1">{order.customer.firstName} {order.customer.lastName}</p>
           <p className="text-muted">{order.customer.line1}, {order.customer.city}</p>
+          {order.customer.nationalAddress && (
+            <p className="text-muted">
+              {checkoutT.nationalAddress}: <span dir="ltr">{order.customer.nationalAddress}</span>
+            </p>
+          )}
           <p className="text-muted" dir="ltr">{order.customer.phone}</p>
         </div>
         {paid && (

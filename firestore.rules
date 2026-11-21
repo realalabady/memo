@@ -29,12 +29,13 @@ service cloud.firestore {
       match /addresses/{addressId} {
         allow read, delete: if signedIn() && uid() == userId;
         allow create, update: if signedIn() && uid() == userId
-          && request.resource.data.keys().hasOnly(['firstName', 'lastName', 'email', 'phone', 'city', 'line1', 'zip', 'label', 'createdAt'])
+          && request.resource.data.keys().hasOnly(['firstName', 'lastName', 'email', 'phone', 'city', 'line1', 'zip', 'nationalAddress', 'label', 'createdAt'])
           && request.resource.data.firstName is string && request.resource.data.firstName.size() <= 60
           && request.resource.data.lastName is string && request.resource.data.lastName.size() <= 60
           && request.resource.data.phone is string && request.resource.data.phone.size() <= 20
           && request.resource.data.city is string && request.resource.data.city.size() <= 60
-          && request.resource.data.line1 is string && request.resource.data.line1.size() <= 200;
+          && request.resource.data.line1 is string && request.resource.data.line1.size() <= 200
+          && (!('nationalAddress' in request.resource.data) || (request.resource.data.nationalAddress is string && request.resource.data.nationalAddress.matches('^[A-Z]{4}[0-9]{4}$')));
       }
 
       // Wishlist: one doc per saved product, id = productId
@@ -105,6 +106,11 @@ service cloud.firestore {
     match /pages/{slug} {
       allow read: if true;
       allow write: if false;
+    }
+
+    // Tabby / Tamara keys (Admin › Payments): server only, never readable from any client, admins included
+    match /secrets/{id} {
+      allow read, write: if false;
     }
 
     // Per-user request counters (rate limiting), server only

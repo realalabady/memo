@@ -13,8 +13,9 @@ import { localized } from "@/i18n/config";
 import { useFormat, useT } from "@/i18n/client";
 import { fmt } from "@/i18n/dictionaries";
 import { useAuth, useAuthedFetch } from "@/lib/auth/auth-provider";
-import { useAddresses } from "@/lib/data/hooks";
+import { useAddresses, useSettings } from "@/lib/data/hooks";
 import { saveAddress } from "@/lib/data/mutations";
+import { useFormErrors } from "@/lib/form-errors";
 import { PROVIDER_LIMITS, providerAvailable } from "@/lib/money";
 import { buyable, cartTotal, useCart, useCartSync } from "@/lib/store/cart";
 import type { Provider, SavedAddress } from "@/lib/types";
@@ -27,6 +28,7 @@ const providerName: Record<Provider, { en: string; ar: string }> = {
 
 export default function CheckoutPage() {
   const t = useT().checkout;
+  const form = useFormErrors();
   const legal = useT().legal;
   const footerT = useT().footer;
   const common = useT().common;
@@ -39,6 +41,13 @@ export default function CheckoutPage() {
   const [preset, setPreset] = useState<SavedAddress | null>(null);
   const authedFetch = useAuthedFetch();
   const [provider, setProvider] = useState<Provider>("tabby");
+  const { data: settings } = useSettings();
+  // If the admin switched Tabby off, start on Tamara (and the other way round).
+  useEffect(() => {
+    const off = (p: Provider) => (p === "tabby" ? settings.tabbyEnabled : settings.tamaraEnabled) === false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- follows the live settings doc
+    if (off(provider)) setProvider(provider === "tabby" ? "tamara" : "tabby");
+  }, [settings.tabbyEnabled, settings.tamaraEnabled, provider]);
   const [busy, setBusy] = useState(false);
   const [mounted, setMounted] = useState(false);
   // eslint-disable-next-line react-hooks/set-state-in-effect -- cart is hydrated from localStorage
@@ -59,10 +68,12 @@ export default function CheckoutPage() {
 
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (!form.validate(e.currentTarget)) return;
     const f = new FormData(e.currentTarget);
     const customer = Object.fromEntries(
-      ["firstName", "lastName", "email", "phone", "city", "line1", "zip"].map((k) => [k, String(f.get(k) ?? "")]),
+      ["firstName", "lastName", "email", "phone", "city", "line1", "zip", "nationalAddress"].map((k) => [k, String(f.get(k) ?? "")]),
     );
+    customer.nationalAddress = customer.nationalAddress.trim().toUpperCase();
     setBusy(true);
     try {
       const res = await authedFetch("/api/checkout", {
@@ -77,8 +88,8 @@ export default function CheckoutPage() {
       const body = await res.json();
       if (!res.ok) throw new Error(body.error ?? t.failed);
       if (user && !demo && !preset && f.get("saveAddress") === "on") {
-        const { firstName, lastName, email, phone, city, line1, zip } = customer;
-        await saveAddress(user.uid, { firstName, lastName, email, phone, city, line1, zip }).catch(() => {});
+        const { firstName, lastName, email, phone, city, line1, zip, nationalAddress } = customer;
+        await saveAddress(user.uid, { firstName, lastName, email, phone, city, line1, zip, nationalAddress }).catch(() => {});
       }
       window.location.assign(body.url);
     } catch (err) {
@@ -144,7 +155,7 @@ export default function CheckoutPage() {
           </div>
         )}
 
-        <form onSubmit={submit} className="mt-12 grid gap-8 lg:grid-cols-12">
+        <form onSubmit={submit} onInput={form.clear} noValidate className="mt-12 grid gap-8 lg:grid-cols-12">
           <div className="space-y-8 lg:col-span-7">
             <Bezel innerClassName="p-6 md:p-8">
               <p className="font-display text-3xl italic">{t.delivery}</p>
@@ -154,7 +165,7 @@ export default function CheckoutPage() {
                     <button
                       type="button"
                       key={a.id}
-                      onClick={() => setPreset(a)}
+                      onClick={() => { setPreset(a); form.reset(); }}
                       className={cn("rounded-full px-4 py-2 text-sm ring-1 transition", preset?.id === a.id ? "bg-ink text-paper ring-ink" : "ring-ink/10 hover:bg-cream")}
                     >
                       {a.label || `${a.line1}, ${a.city}`}
@@ -162,7 +173,7 @@ export default function CheckoutPage() {
                   ))}
                   <button
                     type="button"
-                    onClick={() => setPreset(null)}
+                    onClick={() => { setPreset(null); form.reset(); }}
                     className={cn("rounded-full px-4 py-2 text-sm ring-1 transition", !preset ? "bg-ink text-paper ring-ink" : "ring-ink/10 hover:bg-cream")}
                   >
                     {t.newAddress}
@@ -171,13 +182,14 @@ export default function CheckoutPage() {
               )}
               {/* keyed so picking a saved address refills the (uncontrolled) fields */}
               <div key={preset?.id ?? "new"} className="mt-6 grid gap-4 sm:grid-cols-2">
-                <Field label={t.firstName} name="firstName" required defaultValue={preset?.firstName ?? first} autoComplete="given-name" />
-                <Field label={t.lastName} name="lastName" required defaultValue={preset?.lastName ?? rest.join(" ")} autoComplete="family-name" />
-                <Field label={t.email} name="email" type="email" dir="ltr" required defaultValue={user?.email} autoComplete="email" />
-                <Field label={t.mobile} name="phone" type="tel" dir="ltr" required defaultValue={preset?.phone ?? profile?.phone} placeholder="+9665XXXXXXXX" autoComplete="tel" />
-                <Field label={t.city} name="city" required defaultValue={preset?.city} placeholder={t.cityPlaceholder} autoComplete="address-level2" />
-                <Field label={t.zip} name="zip" dir="ltr" defaultValue={preset?.zip} autoComplete="postal-code" />
-                <Field className="sm:col-span-2" label={t.street} name="line1" required defaultValue={preset?.line1} placeholder={t.streetPlaceholder} autoComplete="street-address" />
+                <Field label={t.firstName} name="firstName" required defaultValue={preset?.firstName ?? first} autoComplete="given-name" error={form.errors.firstName} />
+                <Field label={t.lastName} name="lastName" required defaultValue={preset?.lastName ?? rest.join(" ")} autoComplete="family-name" error={form.errors.lastName} />
+                <Field label={t.email} name="email" type="email" dir="ltr" required defaultValue={user?.email} autoComplete="email" error={form.errors.email} />
+                <Field label={t.mobile} name="phone" type="tel" dir="ltr" required defaultValue={preset?.phone ?? profile?.phone} placeholder="+9665XXXXXXXX" autoComplete="tel" error={form.errors.phone} />
+                <Field label={t.city} name="city" required defaultValue={preset?.city} placeholder={t.cityPlaceholder} autoComplete="address-level2" error={form.errors.city} />
+                <Field label={t.zip} name="zip" dir="ltr" defaultValue={preset?.zip} autoComplete="postal-code" error={form.errors.zip} />
+                <Field className="sm:col-span-2" label={t.street} name="line1" required defaultValue={preset?.line1} placeholder={t.streetPlaceholder} autoComplete="street-address" error={form.errors.line1} />
+                <Field label={t.nationalAddress} name="nationalAddress" dir="ltr" maxLength={8} pattern="[A-Za-z]{4}[0-9]{4}" title={t.nationalAddressHint} placeholder="RRRD2929" defaultValue={preset?.nationalAddress} autoCapitalize="characters" style={{ textTransform: "uppercase" }} error={form.errors.nationalAddress} />
                 {user && !demo && !preset && (
                   <label className="flex items-center gap-3 text-sm text-ink/70 sm:col-span-2">
                     <input type="checkbox" name="saveAddress" className="size-4 accent-[var(--color-ink)]" />
@@ -191,7 +203,7 @@ export default function CheckoutPage() {
               <p className="font-display text-3xl italic">{t.payment}</p>
               <p className="mt-1 text-sm text-muted">{t.paymentNote}</p>
               <div className="mt-6 grid gap-3">
-                {(["tabby", "tamara"] as const).map((p) => {
+                {(["tabby", "tamara"] as const).filter((p) => (p === "tabby" ? settings.tabbyEnabled : settings.tamaraEnabled) !== false).map((p) => {
                   const ok = providerAvailable(p, total);
                   const selected = provider === p;
                   return (

@@ -7,7 +7,7 @@ import { ProviderChip } from "@/components/ui/primitives";
 import { useFormat, useT } from "@/i18n/client";
 import { useMerchantScope } from "@/lib/auth/merchant-scope";
 import { useMerchantOrders, usePayouts, useSettings } from "@/lib/data/hooks";
-import { shortId } from "@/lib/utils";
+import { shortId, pct } from "@/lib/utils";
 
 export default function MerchantPayouts() {
   const t = useT().merchant;
@@ -37,7 +37,7 @@ export default function MerchantPayouts() {
               <td className="text-muted">{date(o.createdAt)}</td>
               <td>{o.provider !== "demo" && <ProviderChip provider={o.provider} />}</td>
               <td className="tabular-nums">{money(o.subtotal)}</td>
-              <td className="tabular-nums text-muted">−{money(o.commission, { decimals: true })} ({Math.round(o.commissionRate * 100)}%)</td>
+              <td className="tabular-nums text-muted">−{money(o.commission, { decimals: true })} ({pct(o.commissionRate)})</td>
               <td className="tabular-nums text-muted">−{money(o.providerFee, { decimals: true })}</td>
               <td className="tabular-nums font-medium">{money(o.payoutAmount, { decimals: true })}</td>
               <td><PayoutState row={o} settings={settings} /></td>

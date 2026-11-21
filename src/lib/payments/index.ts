@@ -1,7 +1,6 @@
 import "server-only";
 import type { Provider } from "@/lib/types";
-import { tabbyConfigured } from "./tabby";
-import { tamaraConfigured } from "./tamara";
+import { tabbyConfigured, tamaraConfigured } from "@/lib/server/payment-config";
 
 const isProduction = () => process.env.NODE_ENV === "production";
 
@@ -10,8 +9,12 @@ const isProduction = () => process.env.NODE_ENV === "production";
  * your Tabby/Tamara keys are live. It is NEVER available in production:
  * `PAYMENTS_DEMO=true` is ignored there (and src/instrumentation.ts refuses to boot with it).
  */
-export function shouldSimulate(provider: Provider) {
+export async function shouldSimulate(provider: Provider) {
   if (isProduction()) return false;
   if (process.env.PAYMENTS_DEMO === "true") return true;
-  return !(provider === "tabby" ? tabbyConfigured() : tamaraConfigured());
+  return !(await providerConfigured(provider));
+}
+
+export function providerConfigured(provider: Provider) {
+  return provider === "tabby" ? tabbyConfigured() : tamaraConfigured();
 }
